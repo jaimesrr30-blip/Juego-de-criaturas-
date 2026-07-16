@@ -230,7 +230,7 @@ canvas{display:block; image-rendering:pixelated; image-rendering:crisp-edges;}
 #dialogueBox.show{display:block;}
 #dialogueBox .npc-name{color:var(--ui-accent2); font-weight:700; margin-bottom:6px; font-size:0.9rem;}
 #dialogueBox .npc-text{font-size:0.92rem; line-height:1.4; min-height:44px;}
-#dialogueBox .npc-choices{display:flex; flex-direction:column; gap:6px; margin-top:10px;}
+#dialogueBox .npc-choices{display:flex; flex-direction:column; gap:6px; margin-top:10px; max-height:44vh; overflow-y:auto; padding-right:4px;}
 #dialogueBox .npc-choices button{
   background:#242840; border:1px solid var(--ui-border); color:var(--ui-text); border-radius:8px;
   padding:8px 12px; text-align:left; cursor:pointer; font-size:0.85rem;
@@ -1113,9 +1113,16 @@ function generateWorldMap(biomeId){
   tiles[portalSpot.y][portalSpot.x]='portal';
   for(let y=-1;y<=1;y++) for(let x=-1;x<=1;x++){ obstacles.delete((portalSpot.x+x)+','+(portalSpot.y+y)); }
 
+  // centro de curación (edificio junto a la aldea, siempre accesible)
+  const healSpot = {x: clamp(villageX-5,3,MAP_W-4), y: villageY};
+  for(let y=-1;y<=1;y++) for(let x=-1;x<=1;x++){
+    const yy=healSpot.y+y, xx=healSpot.x+x;
+    if(yy>0&&yy<MAP_H-1&&xx>0&&xx<MAP_W-1){ obstacles.delete(xx+','+yy); if(tiles[yy][xx]!=='camino') tiles[yy][xx]='piso_aldea'; }
+  }
+
   return {
     biomeId, tiles, width:MAP_W, height:MAP_H, decor, obstacles,
-    village:{x:villageX,y:villageY}, ruinSpot, bossSpot, portalSpot,
+    village:{x:villageX,y:villageY}, ruinSpot, bossSpot, portalSpot, healSpot,
     ground: params.ground
   };
 }
@@ -1963,6 +1970,8 @@ function checkProximity(){
   }
   const pd = Math.hypot((rt.map.portalSpot.x*TILE+TILE/2)-player.x, (rt.map.portalSpot.y*TILE+TILE/2)-player.y);
   if(pd<best){ best=pd; nearbyInteractable = {type:'portal', ref:rt.map.portalSpot}; }
+  const hd2 = Math.hypot((rt.map.healSpot.x*TILE+TILE/2)-player.x, (rt.map.healSpot.y*TILE+TILE/2)-player.y);
+  if(hd2<best){ best=hd2; nearbyInteractable = {type:'heal', ref:rt.map.healSpot}; }
   if(rt.bossAlive){
     const bd = Math.hypot((rt.map.bossSpot.x*TILE+TILE/2)-player.x, (rt.map.bossSpot.y*TILE+TILE/2)-player.y);
     if(bd<54){ nearbyInteractable = {type:'boss', ref:rt.def}; best=bd; }
@@ -1986,6 +1995,7 @@ function checkProximity(){
     let txt = 'Pulsa <b>E</b> para interactuar';
     if(nearbyInteractable.type==='npc') txt = 'Pulsa <b>E</b> para hablar con '+nearbyInteractable.ref.name;
     else if(nearbyInteractable.type==='portal') txt = 'Pulsa <b>E</b> para usar el portal';
+    else if(nearbyInteractable.type==='heal') txt = 'Pulsa <b>E</b> para entrar al Centro de Curación';
     else if(nearbyInteractable.type==='boss') txt = 'Pulsa <b>E</b> para desafiar al guardián';
     else if(nearbyInteractable.type==='wild') txt = 'Pulsa <b>E</b> para enfrentarte a la criatura';
     prompt.innerHTML = txt; prompt.classList.add('show');
@@ -2112,6 +2122,9 @@ function render(){
       drawCreatureArt(wctx, bossSpecies, bx-camera.x, by-camera.y, TILE*2.1, {facing:'down', animT:performance.now()/1000, silhouette:false});
     }});
   }
+  const hs = rt.map.healSpot;
+  const hcx = hs.x*TILE+TILE/2, hcy = hs.y*TILE+TILE/2;
+  drawables.push({y:hcy+TILE*0.8, draw:()=>renderHealingCenter(hcx-camera.x, hcy-camera.y)});
   drawables.push({y:player.y, draw:()=>drawPersonSprite(wctx, player.x-camera.x, player.y-camera.y, '#3fa9f5', '#1a3a5a', player.animPhase, player.moving)});
   drawables.sort((a,b)=>a.y-b.y);
   for(const d of drawables) d.draw();
@@ -2119,6 +2132,24 @@ function render(){
   renderDayNightOverlay();
 }
 function drawGlowRingWrap(x,y){ wctx.save(); wctx.translate(x,y); drawGlowRing(wctx, TILE*1.6, '#ff6b6b'); wctx.restore(); }
+function renderHealingCenter(x,y){
+  wctx.save(); wctx.translate(x,y);
+  const s = TILE*1.9;
+  const t = performance.now()/1000;
+  const pulse = 0.18 + Math.sin(t*2)*0.05;
+  const g = wctx.createRadialGradient(0,-s*0.05,4,0,-s*0.05,s*0.95);
+  g.addColorStop(0,'rgba(255,120,120,'+pulse+')'); g.addColorStop(1,'rgba(255,120,120,0)');
+  wctx.fillStyle=g; wctx.beginPath(); wctx.arc(0,-s*0.05,s*0.95,0,Math.PI*2); wctx.fill();
+  wctx.fillStyle='rgba(0,0,0,0.3)'; wctx.beginPath(); wctx.ellipse(0, s*0.42, s*0.48, s*0.11, 0,0,Math.PI*2); wctx.fill();
+  wctx.fillStyle='#f2ece1'; wctx.fillRect(-s*0.4, -s*0.04, s*0.8, s*0.4);
+  wctx.strokeStyle='#c9beac'; wctx.lineWidth=2; wctx.strokeRect(-s*0.4,-s*0.04,s*0.8,s*0.4);
+  poly(wctx, [[-s*0.48,-s*0.04],[0,-s*0.42],[s*0.48,-s*0.04]], '#c0392b', '#8f2a20');
+  wctx.fillStyle='#7a5230'; wctx.fillRect(-s*0.09, s*0.13, s*0.18, s*0.23);
+  wctx.fillStyle='#e63946';
+  wctx.fillRect(-s*0.045,-s*0.26,s*0.09,s*0.2);
+  wctx.fillRect(-s*0.11,-s*0.2,s*0.22,s*0.07);
+  wctx.restore();
+}
 function renderWeather(){
   const w = gameState.weather.current;
   const ctx = wctx, W = worldCanvas.width, H = worldCanvas.height;
@@ -2169,6 +2200,7 @@ function updateMinimap(){
   mctx.fillStyle = tileBaseColors(map.ground)[0]; mctx.fillRect(0,0,150,150);
   mctx.fillStyle='#8a7a5a'; mctx.fillRect((map.village.x-6)*TILE*sx,(map.village.y-6)*TILE*sy,12*TILE*sx,12*TILE*sy);
   mctx.fillStyle='#c9a6ff'; mctx.beginPath(); mctx.arc(map.portalSpot.x*TILE*sx, map.portalSpot.y*TILE*sy, 4,0,Math.PI*2); mctx.fill();
+  mctx.fillStyle='#e63946'; mctx.beginPath(); mctx.arc(map.healSpot.x*TILE*sx, map.healSpot.y*TILE*sy, 4,0,Math.PI*2); mctx.fill();
   if(rt.bossAlive){ mctx.fillStyle='#ff5555'; mctx.beginPath(); mctx.arc(map.bossSpot.x*TILE*sx, map.bossSpot.y*TILE*sy, 4,0,Math.PI*2); mctx.fill(); }
   for(const w of rt.wildEntities){ mctx.fillStyle='#ffd23f'; mctx.beginPath(); mctx.arc(w.x*sx, w.y*sy, 2,0,Math.PI*2); mctx.fill(); }
   mctx.fillStyle='#3fa9f5'; mctx.beginPath(); mctx.arc(player.x*sx, player.y*sy, 4,0,Math.PI*2); mctx.fill();
@@ -2183,12 +2215,14 @@ function updateHud(){
   document.getElementById('btnOpenQuests').setAttribute('data-badge', String(activeQuests));
 }
 
-function enterWorld(biomeId, spawnAtPortal){
+function enterWorld(biomeId, mode){
   currentRuntime = getWorldRuntime(biomeId);
   gameState.currentWorld = biomeId;
   const map = currentRuntime.map;
-  if(spawnAtPortal){
+  if(mode==='portal'){
     player.x = map.portalSpot.x*TILE+TILE/2; player.y = (map.portalSpot.y+1)*TILE+TILE/2;
+  } else if(mode==='village'){
+    player.x = map.village.x*TILE; player.y = (map.village.y+4)*TILE;
   } else {
     player.x = (gameState.playerPos.x||map.village.x)*TILE; player.y = (gameState.playerPos.y||map.village.y)*TILE;
   }
@@ -2240,6 +2274,7 @@ function handleInteract(){
   if(!nearbyInteractable) return;
   if(nearbyInteractable.type==='npc') openNpcDialogue(nearbyInteractable.ref);
   else if(nearbyInteractable.type==='portal') openPortalChoice();
+  else if(nearbyInteractable.type==='heal') openHealCenter();
   else if(nearbyInteractable.type==='wild') startWildBattle(nearbyInteractable.ref);
   else if(nearbyInteractable.type==='boss') openBossConfirm(nearbyInteractable.ref);
 }
@@ -2781,8 +2816,48 @@ function openPortalChoice(){
   showChoiceDialogue('Portal', 'El portal resplandece con energía. ¿A dónde deseas viajar?', choices);
 }
 function travelTo(biomeId){
-  enterWorld(biomeId, true);
+  enterWorld(biomeId, 'portal');
   showToast('🌍 Has llegado a '+BIOME_BY_ID[biomeId].name);
+  saveGame();
+}
+
+/* ---- Centro de Curación: sanación gratis + viaje rápido ---- */
+function openHealCenter(){
+  showChoiceDialogue('Centro de Curación',
+    'Bienvenido al Centro de Curación de '+currentRuntime.biome.name+'. Aquí puedes curar a tu equipo sin coste y viajar rápidamente a cualquier región que ya hayas desbloqueado.',
+    [
+      {label:'💊 Curar a mi equipo (gratis)', action:()=>healTeamFully()},
+      {label:'🌀 Viaje rápido', action:()=>openFastTravelMenu()},
+      {label:'Salir', action:()=>{}}
+    ]);
+}
+function healTeamFully(){
+  if(!gameState.team.length){ showToast('No tienes criaturas que curar.'); return; }
+  for(const c of gameState.team){ c.currentHp = c.stats.hp; c.status = null; c.statusTurns = 0; }
+  renderPartyBar();
+  showToast('✨ Tu equipo ha sido curado por completo. ¡Totalmente gratis!');
+  saveGame();
+}
+function openFastTravelMenu(){
+  const choices = WORLD_ORDER_LIST.map(biomeId=>{
+    const biome = BIOME_BY_ID[biomeId];
+    const unlocked = gameState.unlockedWorlds.includes(biomeId);
+    const isCurrent = biomeId===currentRuntime.biome.id;
+    return {
+      label: (unlocked ? '🌍 ' : '🔒 ')+biome.name+(isCurrent?' (aquí)':''),
+      action: ()=>{
+        if(isCurrent){ showToast('Ya te encuentras en '+biome.name+'.'); return; }
+        if(!unlocked){ showToast('Aún no has desbloqueado '+biome.name+'. Derrota al guardián de la región anterior para acceder.'); return; }
+        fastTravelTo(biomeId);
+      }
+    };
+  });
+  choices.push({label:'Cancelar', action:()=>{}});
+  showChoiceDialogue('Viaje Rápido', 'Elige la región a la que deseas viajar:', choices);
+}
+function fastTravelTo(biomeId){
+  enterWorld(biomeId, 'village');
+  showToast('🌀 Has viajado a '+BIOME_BY_ID[biomeId].name+'.');
   saveGame();
 }
 
@@ -3220,7 +3295,7 @@ function startGameSession(){
   minimapCanvas = document.getElementById('minimapCanvas'); mctx = minimapCanvas.getContext('2d');
   resizeCanvases();
   document.getElementById('touchControls').classList.toggle('active', !!gameState.settings.touch);
-  enterWorld(gameState.currentWorld, false);
+  enterWorld(gameState.currentWorld, 'continue');
   renderPartyBar();
   updateQuestBadge();
   lastFrameTime = 0;
