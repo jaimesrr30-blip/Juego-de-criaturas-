@@ -170,6 +170,7 @@ canvas{display:block; image-rendering:pixelated; image-rendering:crisp-edges;}
 .grid{display:grid; gap:10px;}
 .grid.g6{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));}
 .grid.g4{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));}
+.grid.gcreature{grid-template-columns:repeat(auto-fill,minmax(168px,1fr)); gap:16px;}
 .card{
   background:#1a1d2e; border:1px solid var(--ui-border); border-radius:10px; padding:8px;
   cursor:pointer; transition:border-color .15s, transform .12s; text-align:center;
@@ -182,13 +183,36 @@ canvas{display:block; image-rendering:pixelated; image-rendering:crisp-edges;}
 
 .item-card .count{font-size:0.65rem; color:var(--ui-accent2);}
 
+/* Tarjetas grandes de criatura (equipo, caja, enciclopedia) */
+.creature-card{
+  background:linear-gradient(180deg,#1c2036,#171a29); border:1px solid var(--ui-border); border-radius:14px;
+  padding:14px; cursor:pointer; text-align:center; transition:border-color .15s, transform .12s, box-shadow .15s;
+  position:relative;
+}
+.creature-card:hover{border-color:var(--ui-accent); transform:translateY(-3px); box-shadow:0 8px 20px rgba(0,0,0,0.35);}
+.creature-card canvas{width:100%; height:128px; background:radial-gradient(ellipse at 50% 60%, rgba(255,255,255,0.05), transparent 70%);}
+.creature-card .habitat-badge{position:absolute; top:10px; right:10px; font-size:1rem; filter:drop-shadow(0 1px 2px rgba(0,0,0,0.6));}
+.creature-card .name{font-size:0.95rem; font-weight:700; margin-top:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.creature-card .sub{font-size:0.75rem; color:var(--ui-text-dim); margin-top:1px;}
+.creature-card .mini-stats{font-size:0.68rem; color:var(--ui-text-dim); margin-top:6px; line-height:1.5;}
+.creature-card .hpbar-lg{width:100%; height:6px; background:#2a2d3e; border-radius:4px; overflow:hidden; margin-top:8px;}
+.creature-card .hpbar-lg i{display:block; height:100%; background:linear-gradient(90deg,#4ade80,#22c55e);}
+.creature-card.fainted{opacity:0.45;}
+
 /* ---------- ENCYCLOPEDIA ---------- */
-#dexDetail{display:none; gap:16px; margin-top:14px; border-top:1px solid var(--ui-border); padding-top:14px;}
+#dexDetail{display:none; gap:20px; margin-top:14px; border-top:1px solid var(--ui-border); padding-top:14px;}
 #dexDetail.show{display:flex;}
-#dexDetail canvas{width:130px; height:130px; background:#0d0f1a; border-radius:10px;}
+#dexDetail canvas{width:220px; height:220px; background:#0d0f1a; border-radius:12px; flex-shrink:0;}
 #dexDetail .info{flex:1;}
 #dexDetail h3{margin:0 0 4px;}
 #dexDetail .stats-mini{display:flex; gap:14px; flex-wrap:wrap; font-size:0.78rem; color:var(--ui-text-dim); margin-top:6px;}
+.dex-world-tabs{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;}
+.dex-world-tab{
+  background:#1a1d2e; border:1px solid var(--ui-border); color:var(--ui-text-dim); border-radius:999px;
+  padding:6px 14px; font-size:0.78rem; cursor:pointer; font-weight:600;
+}
+.dex-world-tab.active{color:#0a0c16; background:var(--ui-accent); border-color:var(--ui-accent);}
+.dex-world-tab.locked{opacity:0.5;}
 
 /* ---------- QUESTS ---------- */
 .quest-item{background:#1a1d2e; border:1px solid var(--ui-border); border-radius:10px; padding:10px 14px; margin-bottom:8px;}
@@ -412,11 +436,12 @@ canvas{display:block; image-rendering:pixelated; image-rendering:crisp-edges;}
   </div>
 
   <div class="modal-overlay" id="modalDex">
-    <div class="modal-panel" style="width:min(1000px,94vw);">
+    <div class="modal-panel" style="width:min(1180px,96vw);">
       <div class="modal-head"><h2>Enciclopedia de Criaturas</h2><button class="modal-close" data-close="modalDex">✕</button></div>
       <div class="modal-body">
         <div id="dexProgress" style="margin-bottom:10px; font-size:0.85rem; color:var(--ui-text-dim);"></div>
-        <div class="grid g6" id="dexGrid"></div>
+        <div class="dex-world-tabs" id="dexWorldTabs"></div>
+        <div class="grid gcreature" id="dexGrid"></div>
         <div id="dexDetail"></div>
       </div>
     </div>
@@ -2822,20 +2847,23 @@ function renderPartyBar(){
 function renderPartyModal(){
   const body = document.getElementById('partyModalBody'); body.innerHTML='';
   if(!gameState.team.length) body.innerHTML = '<p style="color:var(--ui-text-dim)">No tienes criaturas en tu equipo todavía.</p>';
-  const grid = document.createElement('div'); grid.className='grid g4';
+  const grid = document.createElement('div'); grid.className='grid gcreature';
   gameState.team.forEach((c,i)=>{
     const species = SPECIES_BY_ID[c.speciesId];
     const rarity = RARITY_BY_ID[species.rarity];
-    const card = document.createElement('div'); card.className='card'; card.style.cursor='default';
-    card.innerHTML = `<canvas width="120" height="90"></canvas>
+    const hpRatio = c.currentHp/c.stats.hp;
+    const card = document.createElement('div'); card.className='creature-card'+(isFainted(c)?' fainted':''); card.style.cursor='default';
+    card.innerHTML = `<span class="habitat-badge">${habitatEmoji(species.habitat)}</span>
+      <canvas width="220" height="180"></canvas>
       <div class="name">${creatureDisplayName(c)}</div>
       <div class="sub">Nv.${c.level} · ${species.archetypeLabel}</div>
       <span class="rarity-tag" style="background:${rarity.color}22; color:${rarity.color}">${rarity.name}</span>
-      <div style="margin-top:6px; font-size:0.72rem; text-align:left;">
-        HP ${c.currentHp}/${c.stats.hp}<br>ATQ ${c.stats.atk} · DEF ${c.stats.def} · VEL ${c.stats.spd}<br>
-        XP ${c.xp}/${c.xpNext}
+      <div class="hpbar-lg"><i style="width:${Math.round(hpRatio*100)}%; background:${hpRatio>0.5?'':hpRatio>0.2?'linear-gradient(90deg,#fbbf24,#f59e0b)':'linear-gradient(90deg,#f87171,#dc2626)'}"></i></div>
+      <div class="mini-stats">
+        HP ${c.currentHp}/${c.stats.hp} · XP ${c.xp}/${c.xpNext}<br>
+        ATQ ${c.stats.atk} · DEF ${c.stats.def} · VEL ${c.stats.spd}
       </div>
-      <div style="margin-top:6px; display:flex; gap:4px; flex-wrap:wrap; justify-content:center;">
+      <div style="margin-top:8px; display:flex; gap:4px; flex-wrap:wrap; justify-content:center;">
         ${gameState.team.length>1?'<button class="icon-btn" data-box="'+i+'" style="font-size:0.65rem; padding:4px 8px;">A la caja</button>':''}
       </div>`;
     grid.appendChild(card);
@@ -2851,13 +2879,20 @@ function renderPartyModal(){
     };
   });
   if(gameState.box.length){
-    const h = document.createElement('h3'); h.textContent='Caja de Criaturas'; h.style.marginTop='18px'; body.appendChild(h);
-    const grid2 = document.createElement('div'); grid2.className='grid g4';
+    const h = document.createElement('h3'); h.textContent='Caja de Criaturas'; h.style.margin='22px 0 12px'; body.appendChild(h);
+    const grid2 = document.createElement('div'); grid2.className='grid gcreature';
     gameState.box.forEach((c,i)=>{
       const species = SPECIES_BY_ID[c.speciesId];
-      const card = document.createElement('div'); card.className='card'; card.style.cursor='default';
-      card.innerHTML = `<canvas width="120" height="90"></canvas><div class="name">${creatureDisplayName(c)}</div><div class="sub">Nv.${c.level}</div>
-        <button class="icon-btn" data-team="${i}" style="font-size:0.65rem; padding:4px 8px; margin-top:6px;" ${gameState.team.length>=6?'disabled':''}>Al equipo</button>`;
+      const rarity = RARITY_BY_ID[species.rarity];
+      const card = document.createElement('div'); card.className='creature-card'; card.style.cursor='default';
+      card.innerHTML = `<span class="habitat-badge">${habitatEmoji(species.habitat)}</span>
+        <canvas width="220" height="180"></canvas>
+        <div class="name">${creatureDisplayName(c)}</div>
+        <div class="sub">Nv.${c.level} · ${species.archetypeLabel}</div>
+        <span class="rarity-tag" style="background:${rarity.color}22; color:${rarity.color}">${rarity.name}</span>
+        <div style="margin-top:8px;">
+          <button class="icon-btn" data-team="${i}" style="font-size:0.7rem; padding:5px 10px;" ${gameState.team.length>=6?'disabled':''}>Al equipo</button>
+        </div>`;
       grid2.appendChild(card);
       renderSpeciesToCanvas(card.querySelector('canvas'), species.id, {animT:0.25});
     });
@@ -2949,20 +2984,42 @@ function promptUseItemOutOfCombat(itemId){
 }
 
 /* ---------------------------------------------------------------------
-   Panel: Enciclopedia
+   Panel: Enciclopedia (paginada por mundo/zona)
    --------------------------------------------------------------------- */
+const HABITAT_EMOJI = {terrestre:'🌳', acuatico:'💧', aereo:'🕊️', anfibio:'🐸', subterraneo:'🕳️'};
+const HABITAT_LABEL = {terrestre:'Terrestre', acuatico:'Acuático', aereo:'Aéreo', anfibio:'Anfibio (agua y tierra)', subterraneo:'Subterráneo / cuevas'};
+function habitatEmoji(h){ return HABITAT_EMOJI[h] || '❔'; }
+
+let dexActiveBiome = null;
 function renderDexModal(){
+  if(!dexActiveBiome) dexActiveBiome = gameState.currentWorld || 'bosque_verde';
+  const tabsEl = document.getElementById('dexWorldTabs'); tabsEl.innerHTML='';
+  for(const biomeId of WORLD_ORDER_LIST){
+    const biome = BIOME_BY_ID[biomeId];
+    const unlocked = gameState.unlockedWorlds.includes(biomeId);
+    const b = document.createElement('button');
+    b.className = 'dex-world-tab'+(biomeId===dexActiveBiome?' active':'')+(unlocked?'':' locked');
+    b.textContent = (unlocked?biome.name:'🔒 '+biome.name);
+    b.onclick = ()=>{ dexActiveBiome = biomeId; renderDexModal(); };
+    tabsEl.appendChild(b);
+  }
+  const speciesHere = speciesByBiome(dexActiveBiome).slice().sort((a,c)=>a.dexNum-c.dexNum);
+  const caughtHere = speciesHere.filter(s=>gameState.dex[s.id] && gameState.dex[s.id].caught).length;
+  document.getElementById('dexProgress').innerHTML =
+    `<b style="color:var(--ui-accent2)">${BIOME_BY_ID[dexActiveBiome].name}</b>: ${caughtHere} / ${speciesHere.length} capturadas en esta zona &nbsp;·&nbsp; `+
+    `Progreso total: ${dexCaughtCount()} / ${SPECIES_CATALOG.length} capturadas (${dexSeenOrCaughtCount()} vistas)`;
   const grid = document.getElementById('dexGrid'); grid.innerHTML='';
-  document.getElementById('dexProgress').textContent = 'Progreso: '+dexCaughtCount()+' / '+SPECIES_CATALOG.length+' capturadas · '+dexSeenOrCaughtCount()+' vistas';
   document.getElementById('dexDetail').classList.remove('show');
-  for(const s of SPECIES_CATALOG){
+  for(const s of speciesHere){
     const e = gameState.dex[s.id];
     const discovered = e && (e.seen||e.caught);
     const rarity = RARITY_BY_ID[s.rarity];
-    const card = document.createElement('div'); card.className='card';
-    card.innerHTML = `<canvas width="90" height="64"></canvas><div class="name">${discovered? s.name : '???'}</div>
-      <div class="sub">#${s.dexNum}</div>
-      ${discovered?'<span class="rarity-tag" style="background:'+rarity.color+'22; color:'+rarity.color+'">'+rarity.name+'</span>':''}`;
+    const card = document.createElement('div'); card.className='creature-card';
+    card.innerHTML = `<span class="habitat-badge">${discovered?habitatEmoji(s.habitat):'❔'}</span>
+      <canvas width="220" height="180"></canvas>
+      <div class="name">${discovered? s.name+(s.isBoss?' 👑':'') : '???'}</div>
+      <div class="sub">#${s.dexNum}${discovered?' · '+s.archetypeLabel:''}</div>
+      ${discovered?'<span class="rarity-tag" style="background:'+rarity.color+'22; color:'+rarity.color+'">'+rarity.name+'</span>':'<span class="rarity-tag" style="background:#33344455; color:var(--ui-text-dim)">???</span>'}`;
     grid.appendChild(card);
     renderSpeciesToCanvas(card.querySelector('canvas'), s.id, {silhouette:!discovered, animT:0.25});
     card.onclick = ()=>showDexDetail(s.id);
@@ -2973,7 +3030,7 @@ function showDexDetail(speciesId){
   const discovered = e && (e.seen||e.caught);
   const panel = document.getElementById('dexDetail'); panel.classList.add('show');
   const rarity = RARITY_BY_ID[s.rarity];
-  panel.innerHTML = `<canvas width="180" height="180"></canvas>
+  panel.innerHTML = `<canvas width="260" height="260"></canvas>
     <div class="info">
       <h3>${discovered? s.name : '??? ('+s.archetypeLabel+')'}</h3>
       <span class="rarity-tag" style="background:${rarity.color}22; color:${rarity.color}">${rarity.name}</span>
@@ -2981,7 +3038,7 @@ function showDexDetail(speciesId){
       ${discovered?`<div class="stats-mini">
         <span>HP base: ${s.baseStats.hp}</span><span>ATQ base: ${s.baseStats.atk}</span>
         <span>DEF base: ${s.baseStats.def}</span><span>VEL base: ${s.baseStats.spd}</span>
-        <span>Elemento: ${s.element}</span><span>Hábitat: ${s.habitat}</span>
+        <span>Elemento: ${s.element}</span><span>Hábitat: ${habitatEmoji(s.habitat)} ${HABITAT_LABEL[s.habitat]}</span>
         <span>Horario: ${s.timeOfDay}</span><span>Capturas: ${e?e.timesCaught:0}</span>
         <span>Nivel máx.: ${e?e.highestLevel:0}</span>
         <span>Lugares: ${s.biomes.map(b=>BIOME_BY_ID[b].name).join(', ')}</span>
