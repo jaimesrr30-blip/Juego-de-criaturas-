@@ -1,0 +1,3206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Creature Realms</title>
+<style>
+:root{
+  --ui-bg: rgba(18,20,32,0.92);
+  --ui-bg-solid:#12141f;
+  --ui-border: #3a3f5c;
+  --ui-accent:#7dd3fc;
+  --ui-accent2:#fbbf24;
+  --ui-text:#eef1ff;
+  --ui-text-dim:#9aa0c0;
+  --ui-danger:#f87171;
+  --ui-good:#4ade80;
+  --radius:14px;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{
+  margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+  background:#05060a; color:var(--ui-text); font-family:var(--font);
+  user-select:none;
+}
+#gameRoot{position:fixed; inset:0; display:none;}
+#gameRoot.active{display:block;}
+canvas{display:block; image-rendering:pixelated; image-rendering:crisp-edges;}
+#worldCanvas{position:absolute; inset:0; width:100%; height:100%; background:#000;}
+
+/* ---------- START SCREEN ---------- */
+#startScreen{
+  position:fixed; inset:0; display:flex; align-items:center; justify-content:center;
+  background: radial-gradient(ellipse at 50% 20%, #1b2450 0%, #090b16 65%, #05060a 100%);
+  z-index:500; flex-direction:column; text-align:center; padding:20px;
+}
+#startScreen h1{
+  font-size:clamp(2.2rem,7vw,4.2rem); margin:0 0 4px 0;
+  background:linear-gradient(90deg,#7dd3fc,#c4b5fd,#fbbf24);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  letter-spacing:2px; text-shadow:0 0 40px rgba(125,211,252,0.25);
+  font-weight:800;
+}
+#startScreen .subtitle{color:var(--ui-text-dim); margin-bottom:34px; font-size:1.05rem; letter-spacing:1px;}
+.menu-btn{
+  background:linear-gradient(180deg,#2a2f4a,#1a1d30); color:var(--ui-text);
+  border:1px solid var(--ui-border); border-radius:var(--radius);
+  padding:14px 38px; font-size:1.05rem; margin:7px; cursor:pointer;
+  min-width:260px; font-weight:600; letter-spacing:0.5px;
+  transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+  box-shadow:0 4px 14px rgba(0,0,0,0.35);
+}
+.menu-btn:hover{transform:translateY(-2px); border-color:var(--ui-accent); box-shadow:0 8px 22px rgba(125,211,252,0.18);}
+.menu-btn:active{transform:translateY(0);}
+.menu-btn:disabled{opacity:0.35; cursor:not-allowed; transform:none;}
+.menu-btn.primary{background:linear-gradient(180deg,#3d6fd6,#2350a8); border-color:#5488e8;}
+.menu-btn.danger{border-color:#7a3535;}
+#startScreen .credits{position:absolute; bottom:14px; color:#565c80; font-size:0.75rem;}
+
+/* Starter select */
+#starterPanel{display:none; flex-direction:column; align-items:center; max-width:900px;}
+#starterPanel.active{display:flex;}
+.starter-grid{display:flex; gap:22px; flex-wrap:wrap; justify-content:center; margin:18px 0;}
+.starter-card{
+  background:var(--ui-bg); border:2px solid var(--ui-border); border-radius:var(--radius);
+  width:190px; padding:14px; cursor:pointer; transition:all .18s ease;
+}
+.starter-card:hover{border-color:var(--ui-accent2); transform:translateY(-4px) scale(1.02);}
+.starter-card.selected{border-color:var(--ui-good); box-shadow:0 0 22px rgba(74,222,128,0.35);}
+.starter-card canvas{width:100%; height:120px;}
+.starter-card h3{margin:6px 0 2px; font-size:1rem;}
+.starter-card p{margin:0; font-size:0.78rem; color:var(--ui-text-dim);}
+
+/* ---------- HUD ---------- */
+#hudTop{
+  position:absolute; top:0; left:0; right:0; display:flex; align-items:center;
+  justify-content:space-between; padding:8px 12px; z-index:40; pointer-events:none;
+  gap:8px; flex-wrap:wrap;
+}
+.hud-pill{
+  background:var(--ui-bg); border:1px solid var(--ui-border); border-radius:999px;
+  padding:6px 14px; font-size:0.82rem; display:flex; align-items:center; gap:6px;
+  pointer-events:auto; white-space:nowrap; backdrop-filter:blur(6px);
+}
+.hud-pill b{color:var(--ui-accent2);}
+#hudButtons{display:flex; gap:6px; pointer-events:auto; flex-wrap:wrap; justify-content:flex-end;}
+.icon-btn{
+  background:var(--ui-bg); border:1px solid var(--ui-border); color:var(--ui-text);
+  border-radius:10px; padding:8px 10px; font-size:0.95rem; cursor:pointer; line-height:1;
+  transition:all .15s; backdrop-filter:blur(6px);
+}
+.icon-btn:hover{border-color:var(--ui-accent);}
+.icon-btn.badge{position:relative;}
+.icon-btn.badge::after{
+  content:attr(data-badge); position:absolute; top:-6px; right:-6px; background:var(--ui-danger);
+  color:#fff; font-size:0.6rem; border-radius:999px; padding:1px 5px; display:none;
+}
+.icon-btn.badge[data-badge]:not([data-badge="0"])::after{display:block;}
+
+#minimapWrap{
+  position:absolute; bottom:14px; right:14px; width:150px; height:150px; z-index:35;
+  border:2px solid var(--ui-border); border-radius:12px; overflow:hidden; background:#000;
+  box-shadow:0 4px 18px rgba(0,0,0,0.45);
+}
+#minimapCanvas{width:100%; height:100%;}
+
+#partyBar{
+  position:absolute; bottom:14px; left:14px; display:flex; gap:6px; z-index:35;
+}
+.party-slot{
+  width:56px; height:64px; background:var(--ui-bg); border:2px solid var(--ui-border);
+  border-radius:10px; display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:3px; cursor:pointer; position:relative;
+}
+.party-slot canvas{width:34px; height:34px;}
+.party-slot .hpbar{width:44px; height:5px; background:#2a2d3e; border-radius:3px; overflow:hidden; margin-top:2px;}
+.party-slot .hpbar i{display:block; height:100%; background:var(--ui-good);}
+.party-slot.fainted{opacity:0.35;}
+.party-slot.active{border-color:var(--ui-accent2);}
+.party-slot .lvl{position:absolute; top:1px; left:3px; font-size:0.55rem; color:var(--ui-text-dim);}
+
+#interactPrompt{
+  position:absolute; left:50%; bottom:100px; transform:translateX(-50%);
+  background:var(--ui-bg); border:1px solid var(--ui-accent2); border-radius:10px;
+  padding:6px 14px; font-size:0.85rem; z-index:36; display:none;
+}
+#interactPrompt.show{display:block;}
+
+/* ---------- TOASTS ---------- */
+#toastStack{position:absolute; top:60px; left:50%; transform:translateX(-50%); z-index:200; display:flex; flex-direction:column; gap:6px; align-items:center;}
+.toast{
+  background:linear-gradient(180deg,#241f3d,#171526); border:1px solid var(--ui-accent2);
+  border-radius:10px; padding:8px 18px; font-size:0.85rem; opacity:0; transform:translateY(-12px);
+  animation: toastIn .35s forwards, toastOut .4s forwards 3.2s; text-align:center;
+  box-shadow:0 6px 20px rgba(0,0,0,0.4);
+}
+@keyframes toastIn{to{opacity:1; transform:translateY(0);}}
+@keyframes toastOut{to{opacity:0; transform:translateY(-10px);}}
+.toast.achievement{border-color:#fbbf24; background:linear-gradient(180deg,#3a2f10,#1c1608);}
+
+/* ---------- MODALS ---------- */
+.modal-overlay{
+  position:absolute; inset:0; background:rgba(4,5,10,0.72); z-index:100; display:none;
+  align-items:center; justify-content:center; backdrop-filter:blur(3px);
+}
+.modal-overlay.show{display:flex;}
+.modal-panel{
+  background:var(--ui-bg-solid); border:1px solid var(--ui-border); border-radius:16px;
+  width:min(920px,94vw); max-height:88vh; display:flex; flex-direction:column;
+  box-shadow:0 20px 60px rgba(0,0,0,0.6); animation:panelIn .2s ease;
+}
+@keyframes panelIn{from{opacity:0; transform:scale(.96) translateY(8px);} to{opacity:1; transform:none;}}
+.modal-head{
+  display:flex; align-items:center; justify-content:space-between; padding:14px 20px;
+  border-bottom:1px solid var(--ui-border);
+}
+.modal-head h2{margin:0; font-size:1.2rem; letter-spacing:0.5px;}
+.modal-close{background:none; border:none; color:var(--ui-text-dim); font-size:1.4rem; cursor:pointer; line-height:1;}
+.modal-close:hover{color:var(--ui-text);}
+.modal-body{padding:16px 20px; overflow-y:auto; flex:1;}
+.modal-tabs{display:flex; gap:6px; padding:0 20px; border-bottom:1px solid var(--ui-border);}
+.modal-tab{
+  background:none; border:none; color:var(--ui-text-dim); padding:10px 6px; cursor:pointer;
+  font-size:0.85rem; border-bottom:2px solid transparent; font-weight:600;
+}
+.modal-tab.active{color:var(--ui-accent); border-color:var(--ui-accent);}
+
+/* grids */
+.grid{display:grid; gap:10px;}
+.grid.g6{grid-template-columns:repeat(auto-fill,minmax(96px,1fr));}
+.grid.g4{grid-template-columns:repeat(auto-fill,minmax(150px,1fr));}
+.card{
+  background:#1a1d2e; border:1px solid var(--ui-border); border-radius:10px; padding:8px;
+  cursor:pointer; transition:border-color .15s, transform .12s; text-align:center;
+}
+.card:hover{border-color:var(--ui-accent); transform:translateY(-2px);}
+.card canvas{width:100%; height:64px;}
+.card .name{font-size:0.75rem; font-weight:600; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.card .sub{font-size:0.65rem; color:var(--ui-text-dim);}
+.rarity-tag{display:inline-block; font-size:0.6rem; padding:1px 6px; border-radius:6px; margin-top:3px; font-weight:700;}
+
+.item-card .count{font-size:0.65rem; color:var(--ui-accent2);}
+
+/* ---------- ENCYCLOPEDIA ---------- */
+#dexDetail{display:none; gap:16px; margin-top:14px; border-top:1px solid var(--ui-border); padding-top:14px;}
+#dexDetail.show{display:flex;}
+#dexDetail canvas{width:130px; height:130px; background:#0d0f1a; border-radius:10px;}
+#dexDetail .info{flex:1;}
+#dexDetail h3{margin:0 0 4px;}
+#dexDetail .stats-mini{display:flex; gap:14px; flex-wrap:wrap; font-size:0.78rem; color:var(--ui-text-dim); margin-top:6px;}
+
+/* ---------- QUESTS ---------- */
+.quest-item{background:#1a1d2e; border:1px solid var(--ui-border); border-radius:10px; padding:10px 14px; margin-bottom:8px;}
+.quest-item h4{margin:0 0 4px; font-size:0.92rem;}
+.quest-item p{margin:0; font-size:0.78rem; color:var(--ui-text-dim);}
+.quest-item .prog{font-size:0.72rem; color:var(--ui-good); margin-top:4px;}
+.quest-item.done{border-color:var(--ui-good);}
+
+/* ---------- DIALOGUE ---------- */
+#dialogueBox{
+  position:absolute; left:50%; bottom:18px; transform:translateX(-50%); width:min(680px,92vw);
+  background:var(--ui-bg); border:1px solid var(--ui-accent); border-radius:14px; padding:16px 20px;
+  z-index:80; display:none;
+}
+#dialogueBox.show{display:block;}
+#dialogueBox .npc-name{color:var(--ui-accent2); font-weight:700; margin-bottom:6px; font-size:0.9rem;}
+#dialogueBox .npc-text{font-size:0.92rem; line-height:1.4; min-height:44px;}
+#dialogueBox .npc-choices{display:flex; flex-direction:column; gap:6px; margin-top:10px;}
+#dialogueBox .npc-choices button{
+  background:#242840; border:1px solid var(--ui-border); color:var(--ui-text); border-radius:8px;
+  padding:8px 12px; text-align:left; cursor:pointer; font-size:0.85rem;
+}
+#dialogueBox .npc-choices button:hover{border-color:var(--ui-accent);}
+#dialogueBox .continue-hint{text-align:right; font-size:0.7rem; color:var(--ui-text-dim); margin-top:6px;}
+
+/* ---------- COMBAT ---------- */
+#combatScreen{
+  position:fixed; inset:0; z-index:150; display:none; flex-direction:column;
+  background:#0a0c16;
+}
+#combatScreen.show{display:flex;}
+#combatArena{position:relative; flex:1; overflow:hidden;}
+#combatCanvas{width:100%; height:100%;}
+.combat-hpcard{
+  position:absolute; background:var(--ui-bg); border:1px solid var(--ui-border); border-radius:12px;
+  padding:10px 14px; min-width:200px;
+}
+#enemyCard{top:18px; left:18px;}
+#playerCard{bottom:18px; right:18px;}
+.combat-hpcard .row1{display:flex; justify-content:space-between; font-size:0.85rem; font-weight:700;}
+.combat-hpcard .hpouter{height:10px; background:#2a2d3e; border-radius:6px; overflow:hidden; margin-top:6px; border:1px solid #000;}
+.combat-hpcard .hpinner{height:100%; background:linear-gradient(90deg,#4ade80,#22c55e); transition:width .4s ease;}
+.combat-hpcard .hpinner.mid{background:linear-gradient(90deg,#fbbf24,#f59e0b);}
+.combat-hpcard .hpinner.low{background:linear-gradient(90deg,#f87171,#dc2626);}
+.combat-hpcard .hptext{font-size:0.65rem; color:var(--ui-text-dim); margin-top:2px;}
+.combat-hpcard .status-tag{display:inline-block; font-size:0.6rem; padding:1px 6px; border-radius:5px; margin-top:4px; background:#553; color:#fdba74;}
+#combatLog{
+  background:var(--ui-bg); margin:0 12px 4px; border-radius:10px; padding:8px 14px; font-size:0.85rem;
+  min-height:20px; border:1px solid var(--ui-border);
+}
+#combatMenu{display:flex; gap:10px; padding:10px 12px 14px; flex-wrap:wrap;}
+.combat-btn{
+  flex:1; min-width:130px; padding:16px; font-size:1rem; font-weight:700; border-radius:12px; cursor:pointer;
+  border:2px solid var(--ui-border); background:linear-gradient(180deg,#242840,#171a2c); color:var(--ui-text);
+  transition:transform .12s;
+}
+.combat-btn:hover{transform:translateY(-2px); border-color:var(--ui-accent);}
+.combat-btn.attack{border-color:#f87171;}
+.combat-btn.special{border-color:#a78bfa;}
+.combat-btn.item{border-color:#fbbf24;}
+.combat-btn.capture{border-color:#34d399;}
+.combat-btn.switch{border-color:#60a5fa;}
+.combat-btn.flee{border-color:#94a3b8;}
+#combatSubMenu{display:none; flex-wrap:wrap; gap:8px; padding:0 12px 14px;}
+#combatSubMenu.show{display:flex;}
+#combatSubMenu .sub-btn{
+  flex:1; min-width:140px; background:#1a1d2e; border:1px solid var(--ui-border); border-radius:10px;
+  padding:10px; cursor:pointer; text-align:left; font-size:0.8rem; color:var(--ui-text);
+}
+#combatSubMenu .sub-btn:hover{border-color:var(--ui-accent);}
+#combatSubMenu .sub-btn small{display:block; color:var(--ui-text-dim); margin-top:2px;}
+#captureChanceTag{
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(10,12,20,0.9);
+  border:2px solid var(--ui-accent2); border-radius:14px; padding:18px 26px; text-align:center; z-index:30; display:none;
+}
+#captureChanceTag.show{display:block;}
+#captureChanceTag .pct{font-size:2rem; font-weight:800; color:var(--ui-accent2);}
+#captureChanceTag button{margin-top:8px;}
+#bossBanner{
+  position:absolute; top:40%; left:50%; transform:translate(-50%,-50%); text-align:center; z-index:40; display:none;
+  pointer-events:none;
+}
+#bossBanner.show{display:block; animation:bossIn 2.4s ease;}
+@keyframes bossIn{0%{opacity:0; transform:translate(-50%,-70%);} 15%{opacity:1; transform:translate(-50%,-50%);} 85%{opacity:1;} 100%{opacity:0;}}
+#bossBanner h2{font-size:2.4rem; color:#f87171; margin:0; text-shadow:0 0 20px rgba(248,113,113,0.6);}
+#bossBanner p{color:var(--ui-text-dim); margin:4px 0 0;}
+
+/* Level up / evolution overlay */
+#levelUpOverlay{
+  position:absolute; inset:0; z-index:60; display:none; align-items:center; justify-content:center;
+  background:rgba(0,0,0,0.6);
+}
+#levelUpOverlay.show{display:flex;}
+#levelUpOverlay .box{background:var(--ui-bg); border:2px solid var(--ui-accent2); border-radius:16px; padding:26px 36px; text-align:center;}
+#levelUpOverlay canvas{width:120px; height:120px;}
+
+/* ---------- SETTINGS ---------- */
+.settings-row{display:flex; align-items:center; justify-content:space-between; padding:10px 0; border-bottom:1px solid #22243a;}
+.settings-row:last-child{border-bottom:none;}
+.toggle{width:44px; height:24px; border-radius:999px; background:#2a2d3e; position:relative; cursor:pointer; border:1px solid var(--ui-border);}
+.toggle.on{background:#2563eb;}
+.toggle i{position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%; background:#fff; transition:left .15s;}
+.toggle.on i{left:22px;}
+
+/* ---------- TOUCH CONTROLS ---------- */
+#touchControls{position:absolute; inset:0; pointer-events:none; z-index:30; display:none;}
+#touchControls.active{display:block;}
+#dpad{position:absolute; left:20px; bottom:20px; width:140px; height:140px; pointer-events:auto;}
+.dpad-btn{
+  position:absolute; width:48px; height:48px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.25);
+  border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:1.2rem; color:#fff;
+}
+.dpad-btn.up{top:0; left:46px;} .dpad-btn.down{bottom:0; left:46px;}
+.dpad-btn.left{top:46px; left:0;} .dpad-btn.right{top:46px; right:0;}
+#actionBtn{
+  position:absolute; right:24px; bottom:40px; width:70px; height:70px; border-radius:50%;
+  background:rgba(125,211,252,0.18); border:2px solid var(--ui-accent); pointer-events:auto;
+  display:flex; align-items:center; justify-content:center; font-size:0.85rem; font-weight:700; color:var(--ui-accent);
+}
+
+/* scrollbars */
+::-webkit-scrollbar{width:8px; height:8px;}
+::-webkit-scrollbar-thumb{background:#2f3350; border-radius:4px;}
+::-webkit-scrollbar-track{background:transparent;}
+
+@media (max-width:820px){
+  #touchControls.active{display:block;}
+  .hud-pill{font-size:0.7rem; padding:5px 10px;}
+  #partyBar{transform:scale(0.85); transform-origin:bottom left;}
+}
+</style>
+</head>
+<body>
+
+<!-- ============ START SCREEN ============ -->
+<div id="startScreen">
+  <div id="mainMenuPanel">
+    <h1>CREATURE REALMS</h1>
+    <div class="subtitle">Explora. Descubre. Captura. Colecciona.</div>
+    <div>
+      <button class="menu-btn primary" id="btnContinue" disabled>Continuar</button>
+      <br>
+      <button class="menu-btn" id="btnNewGame">Nueva Partida</button>
+      <br>
+      <button class="menu-btn danger" id="btnReset" disabled>Borrar Partida</button>
+    </div>
+  </div>
+  <div id="starterPanel">
+    <h1 style="font-size:1.6rem;">Elige a tu compañero</h1>
+    <div class="subtitle">Esta criatura será tu primera aliada en Creature Realms</div>
+    <div class="starter-grid" id="starterGrid"></div>
+    <div>
+      <button class="menu-btn primary" id="btnConfirmStarter" disabled>Comenzar aventura</button>
+      <button class="menu-btn" id="btnBackToMenu">Volver</button>
+    </div>
+  </div>
+  <div class="credits">Creature Realms — un mundo original de exploración y criaturas</div>
+</div>
+
+<!-- ============ GAME ROOT ============ -->
+<div id="gameRoot">
+  <canvas id="worldCanvas"></canvas>
+
+  <div id="hudTop">
+    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+      <div class="hud-pill">🌍 <b id="hudWorldName">-</b></div>
+      <div class="hud-pill">🪙 <b id="hudCoins">0</b></div>
+      <div class="hud-pill" id="hudTimeWeather">☀️ Día</div>
+    </div>
+    <div id="hudButtons">
+      <button class="icon-btn" id="btnOpenParty" title="Equipo">🐾</button>
+      <button class="icon-btn" id="btnOpenInventory" title="Inventario">🎒</button>
+      <button class="icon-btn" id="btnOpenDex" title="Enciclopedia">📖</button>
+      <button class="icon-btn badge" id="btnOpenQuests" title="Misiones" data-badge="0">📜</button>
+      <button class="icon-btn badge" id="btnOpenAchievements" title="Logros" data-badge="0">🏆</button>
+      <button class="icon-btn" id="btnOpenSettings" title="Menú">⚙️</button>
+    </div>
+  </div>
+
+  <div id="interactPrompt">Pulsa <b>E</b> para interactuar</div>
+
+  <div id="partyBar"></div>
+
+  <div id="minimapWrap"><canvas id="minimapCanvas" width="150" height="150"></canvas></div>
+
+  <div id="toastStack"></div>
+
+  <!-- Dialogue -->
+  <div id="dialogueBox">
+    <div class="npc-name" id="dlgName">NPC</div>
+    <div class="npc-text" id="dlgText">...</div>
+    <div class="npc-choices" id="dlgChoices" style="display:none;"></div>
+    <div class="continue-hint" id="dlgHint">▼ pulsa para continuar</div>
+  </div>
+
+  <!-- Touch controls -->
+  <div id="touchControls">
+    <div id="dpad">
+      <div class="dpad-btn up" data-dir="up">▲</div>
+      <div class="dpad-btn down" data-dir="down">▼</div>
+      <div class="dpad-btn left" data-dir="left">◀</div>
+      <div class="dpad-btn right" data-dir="right">▶</div>
+    </div>
+    <div id="actionBtn">E</div>
+  </div>
+
+  <!-- ===== Modals ===== -->
+  <div class="modal-overlay" id="modalParty">
+    <div class="modal-panel">
+      <div class="modal-head"><h2>Tu Equipo</h2><button class="modal-close" data-close="modalParty">✕</button></div>
+      <div class="modal-body" id="partyModalBody"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalInventory">
+    <div class="modal-panel">
+      <div class="modal-head"><h2>Inventario</h2><button class="modal-close" data-close="modalInventory">✕</button></div>
+      <div class="modal-tabs" id="invTabs"></div>
+      <div class="modal-body" id="invBody"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalDex">
+    <div class="modal-panel" style="width:min(1000px,94vw);">
+      <div class="modal-head"><h2>Enciclopedia de Criaturas</h2><button class="modal-close" data-close="modalDex">✕</button></div>
+      <div class="modal-body">
+        <div id="dexProgress" style="margin-bottom:10px; font-size:0.85rem; color:var(--ui-text-dim);"></div>
+        <div class="grid g6" id="dexGrid"></div>
+        <div id="dexDetail"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalQuests">
+    <div class="modal-panel">
+      <div class="modal-head"><h2>Misiones</h2><button class="modal-close" data-close="modalQuests">✕</button></div>
+      <div class="modal-body" id="questBody"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalAchievements">
+    <div class="modal-panel">
+      <div class="modal-head"><h2>Logros</h2><button class="modal-close" data-close="modalAchievements">✕</button></div>
+      <div class="modal-body" id="achBody"></div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalShop">
+    <div class="modal-panel">
+      <div class="modal-head"><h2 id="shopTitle">Tienda</h2><button class="modal-close" data-close="modalShop">✕</button></div>
+      <div class="modal-body">
+        <div class="hud-pill" style="margin-bottom:10px;">🪙 <b id="shopCoins">0</b></div>
+        <div class="grid g4" id="shopGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-overlay" id="modalSettings">
+    <div class="modal-panel">
+      <div class="modal-head"><h2>Menú</h2><button class="modal-close" data-close="modalSettings">✕</button></div>
+      <div class="modal-body">
+        <div class="settings-row"><span>Música / Ambiente</span><div class="toggle" id="toggleMusic"><i></i></div></div>
+        <div class="settings-row"><span>Efectos de sonido</span><div class="toggle" id="toggleSfx"><i></i></div></div>
+        <div class="settings-row"><span>Controles táctiles</span><div class="toggle" id="toggleTouch"><i></i></div></div>
+        <div class="settings-row"><span>Tiempo de juego</span><b id="settingsPlaytime">0h</b></div>
+        <div class="settings-row"><span>Guardado</span><button class="menu-btn" id="btnSaveNow" style="min-width:auto; padding:8px 18px;">Guardar ahora</button></div>
+        <div class="settings-row"><span>Salir al menú</span><button class="menu-btn danger" id="btnExitToMenu" style="min-width:auto; padding:8px 18px;">Salir</button></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== COMBAT ===== -->
+  <div id="combatScreen">
+    <div id="bossBanner"><h2 id="bossBannerName">JEFE</h2><p id="bossBannerSub"></p></div>
+    <div id="combatArena">
+      <canvas id="combatCanvas"></canvas>
+      <div class="combat-hpcard" id="enemyCard">
+        <div class="row1"><span id="enemyName">-</span><span id="enemyLvl">Nv.1</span></div>
+        <div class="hpouter"><div class="hpinner" id="enemyHpBar"></div></div>
+        <div class="hptext" id="enemyHpText">-</div>
+        <span class="status-tag" id="enemyStatus" style="display:none;"></span>
+      </div>
+      <div class="combat-hpcard" id="playerCard">
+        <div class="row1"><span id="playerName">-</span><span id="playerLvl">Nv.1</span></div>
+        <div class="hpouter"><div class="hpinner" id="playerHpBar"></div></div>
+        <div class="hptext" id="playerHpText">-</div>
+        <span class="status-tag" id="playerStatus" style="display:none;"></span>
+      </div>
+      <div id="captureChanceTag">
+        <div style="font-size:0.8rem; color:var(--ui-text-dim);">Probabilidad de captura</div>
+        <div class="pct" id="captureChancePct">0%</div>
+        <div id="captureCapsuleName" style="font-size:0.8rem;"></div>
+        <button class="menu-btn primary" id="btnThrowCapsule" style="min-width:auto; padding:8px 20px; margin-top:6px;">Lanzar</button>
+        <button class="menu-btn" id="btnCancelCapture" style="min-width:auto; padding:8px 20px;">Cancelar</button>
+      </div>
+    </div>
+    <div id="combatLog">¡Un encuentro salvaje!</div>
+    <div id="combatMenu">
+      <button class="combat-btn attack" data-act="attack">⚔️ Atacar</button>
+      <button class="combat-btn special" data-act="special">✨ Habilidad</button>
+      <button class="combat-btn item" data-act="item">🎒 Objeto</button>
+      <button class="combat-btn capture" data-act="capture">🎯 Capturar</button>
+      <button class="combat-btn switch" data-act="switch">🔄 Cambiar</button>
+      <button class="combat-btn flee" data-act="flee">🏃 Escapar</button>
+    </div>
+    <div id="combatSubMenu"></div>
+  </div>
+
+  <div id="levelUpOverlay">
+    <div class="box">
+      <div id="levelUpTitle" style="font-size:1.3rem; font-weight:700; color:var(--ui-accent2);">¡Subió de nivel!</div>
+      <canvas id="levelUpCanvas"></canvas>
+      <div id="levelUpBody" style="font-size:0.85rem; color:var(--ui-text-dim); margin-top:6px;"></div>
+      <button class="menu-btn primary" id="btnLevelUpOk" style="min-width:auto; padding:8px 24px; margin-top:10px;">Continuar</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+'use strict';
+/* =====================================================================
+   CREATURE REALMS — motor de juego completo (HTML/CSS/JS puro)
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   0. UTILIDADES / RNG DETERMINISTA
+   --------------------------------------------------------------------- */
+function mulberry32(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function hashStr(s){
+  let h = 2166136261;
+  for(let i=0;i<s.length;i++){ h ^= s.charCodeAt(i); h = Math.imul(h,16777619); }
+  return h >>> 0;
+}
+function rngPick(rng, arr){ return arr[Math.floor(rng()*arr.length)]; }
+function rngInt(rng, min, max){ return Math.floor(rng()*(max-min+1))+min; }
+function rngRange(rng, min, max){ return rng()*(max-min)+min; }
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
+function lerp(a,b,t){ return a+(b-a)*t; }
+function choiceWeighted(rng, entries){ // entries: [{item, w}]
+  let total = 0; for(const e of entries) total += e.w;
+  let r = rng()*total;
+  for(const e of entries){ if(r < e.w) return e.item; r -= e.w; }
+  return entries[entries.length-1].item;
+}
+function fmtTime(h,m){
+  const hh = String(Math.floor(h)).padStart(2,'0');
+  const mm = String(Math.floor(m)).padStart(2,'0');
+  return hh+':'+mm;
+}
+function uid(prefix){ return prefix+'_'+Math.random().toString(36).slice(2,10)+Date.now().toString(36); }
+
+/* =====================================================================
+   1. ELEMENTOS, TABLA DE TIPOS, RAREZAS, ARQUETIPOS Y BANCOS DE NOMBRES
+   ===================================================================== */
+const ELEMENTS = ['fuego','agua','planta','electrico','hielo','tierra','viento','sombra','luz','arcano','veneno','cristal'];
+
+const ELEMENT_COLOR = {
+  fuego:['#ff6b3d','#ffb347'], agua:['#3da9ff','#7ee1ff'], planta:['#4ade80','#a3e635'],
+  electrico:['#fde047','#facc15'], hielo:['#a5f3fc','#e0f2fe'], tierra:['#b5834a','#8a5a2b'],
+  viento:['#d1fae5','#86efac'], sombra:['#6b21a8','#312050'], luz:['#fef9c3','#fde68a'],
+  arcano:['#c084fc','#818cf8'], veneno:['#a3e635','#65a30d'], cristal:['#67e8f9','#c4b5fd']
+};
+
+const STRONG_PAIRS = [
+  ['fuego','planta'],['fuego','hielo'],['fuego','cristal'],
+  ['agua','fuego'],['agua','tierra'],
+  ['planta','agua'],['planta','tierra'],
+  ['electrico','agua'],['electrico','viento'],
+  ['hielo','planta'],['hielo','viento'],['hielo','tierra'],
+  ['tierra','electrico'],['tierra','fuego'],['tierra','veneno'],
+  ['viento','planta'],['viento','veneno'],
+  ['luz','sombra'],['luz','veneno'],
+  ['sombra','arcano'],['sombra','cristal'],
+  ['arcano','cristal'],['arcano','agua'],
+  ['cristal','viento'],['cristal','electrico'],
+  ['veneno','arcano']
+];
+function typeMultiplier(atk, def){
+  for(const [a,d] of STRONG_PAIRS){ if(a===atk && d===def) return 2.0; }
+  for(const [a,d] of STRONG_PAIRS){ if(a===def && d===atk) return 0.5; }
+  return 1.0;
+}
+
+const RARITIES = [
+  {id:'comun',        name:'Común',        color:'#9ca3af', weight:42, statMult:1.00, catchMod:1.00, xpMult:1.0},
+  {id:'pococomun',    name:'Poco Común',   color:'#4ade80', weight:26, statMult:1.12, catchMod:0.85, xpMult:1.3},
+  {id:'rara',         name:'Rara',         color:'#38bdf8', weight:15, statMult:1.28, catchMod:0.68, xpMult:1.7},
+  {id:'epica',        name:'Épica',        color:'#a78bfa', weight:8.5,statMult:1.5,  catchMod:0.5,  xpMult:2.3},
+  {id:'legendaria',   name:'Legendaria',   color:'#fbbf24', weight:4,  statMult:1.85, catchMod:0.34, xpMult:3.2},
+  {id:'mitica',       name:'Mítica',       color:'#fb7185', weight:2.2,statMult:2.2,  catchMod:0.22, xpMult:4.2},
+  {id:'omega',        name:'Omega',        color:'#f97316', weight:1.1,statMult:2.6,  catchMod:0.15, xpMult:5.5},
+  {id:'prohibida',    name:'Prohibida',    color:'#7f1d1d', weight:0.55,statMult:3.05,catchMod:0.10, xpMult:7},
+  {id:'secreta',      name:'Secreta',      color:'#1e293b', weight:0.4, statMult:3.5, catchMod:0.07, xpMult:9},
+  {id:'divina',       name:'Divina',       color:'#fef9c3', weight:0.15,statMult:4.2, catchMod:0.045,xpMult:13}
+];
+const RARITY_BY_ID = Object.fromEntries(RARITIES.map(r=>[r.id,r]));
+const RARITY_ORDER = RARITIES.map(r=>r.id);
+
+/* Arquetipos: forma base + tendencia de rol + apéndices posibles */
+const ARCHETYPES = [
+  {id:'dragon',    label:'Dragón',              body:'reptil',    role:'equilibrado', appendages:['alas','cuernos','cola_larga']},
+  {id:'serpiente', label:'Serpiente Gigante',    body:'serpiente', role:'veloz',       appendages:['cresta','colmillos']},
+  {id:'ave',       label:'Ave Legendaria',       body:'ave',       role:'veloz',       appendages:['alas','cresta','cola_pluma']},
+  {id:'escorpion', label:'Escorpión',            body:'artropodo', role:'tanque',      appendages:['pinzas','aguijon']},
+  {id:'espiritu',  label:'Espíritu del Bosque',  body:'fantasma',  role:'especial',    appendages:['aura','halo']},
+  {id:'bestiamar', label:'Bestia Marina',        body:'acuatico',  role:'tanque',      appendages:['aletas','cola_aleta']},
+  {id:'tortuga',   label:'Tortuga Colosal',      body:'caparazon', role:'tanque',      appendages:['caparazon_pico','cola_corta']},
+  {id:'cangrejo',  label:'Cangrejo Gigante',     body:'artropodo', role:'tanque',      appendages:['pinzas','caparazon_pico']},
+  {id:'mariposa',  label:'Mariposa Mágica',      body:'insecto',   role:'especial',    appendages:['alas_grandes','antenas']},
+  {id:'murcielago',label:'Murciélago',           body:'volador',   role:'veloz',       appendages:['alas_membrana','orejas']},
+  {id:'guardian',  label:'Guardián del Bosque',  body:'cuadrupedo',role:'equilibrado', appendages:['cuernos','cola_hojas']},
+  {id:'lobo',      label:'Lobo de Hielo',        body:'cuadrupedo',role:'veloz',       appendages:['cola_peluda','colmillos']},
+  {id:'golem',     label:'Gólem de Lava',        body:'humanoide', role:'tanque',      appendages:['nucleo','brazos_grandes']},
+  {id:'electrico', label:'Criatura Eléctrica',   body:'esferico',  role:'veloz',       appendages:['antenas','chispa']},
+  {id:'espacial',  label:'Ser del Espacio',      body:'etereo',    role:'especial',    appendages:['aura','orbitas']},
+  {id:'celestial', label:'Criatura Celestial',   body:'ave',       role:'especial',    appendages:['alas','halo','estelas']},
+  {id:'cristal',   label:'Guardián de Cristal',  body:'geometrico',role:'tanque',      appendages:['picos_cristal','nucleo']},
+  {id:'plantaviva',label:'Planta Viviente',      body:'planta',    role:'equilibrado', appendages:['hojas','flores','raices']},
+  {id:'fantasma',  label:'Fantasma',             body:'fantasma',  role:'especial',    appendages:['aura','cadenas']},
+  {id:'titan',     label:'Titán de Roca',        body:'humanoide', role:'tanque',      appendages:['nucleo','picos_roca']}
+];
+
+/* Bancos de nombres por elemento (prefijo/raíz) */
+const NAME_PREFIX = {
+  fuego:['Igni','Piro','Ascu','Brasa','Volca','Chispa','Cendra'],
+  agua:['Hidro','Mari','Aqua','Coral','Abisa','Perla','Torren'],
+  planta:['Flori','Silva','Musgo','Espino','Broto','Follaj','Raiz'],
+  electrico:['Volti','Rayo','Chispi','Fulgo','Ampe','Trueno','Ionis'],
+  hielo:['Gelo','Crio','Escarch','Glacia','Nevisc','Cristo','Bruma'],
+  tierra:['Terra','Rocio','Grani','Basal','Arenis','Estrat','Duna'],
+  viento:['Aero','Zephir','Rafa','Vendo','Turbi','Sopla','Ciclo'],
+  sombra:['Umbra','Noct','Tenebr','Eclip','Penum','Negru','Abisal'],
+  luz:['Lumi','Radi','Solar','Auri','Brilla','Halo','Faro'],
+  arcano:['Mystic','Arcan','Enigm','Runa','Sigil','Astral','Vortex'],
+  veneno:['Toxi','Venen','Acido','Miasma','Ponzo','Corros','Bilis'],
+  cristal:['Prisma','Geode','Diaman','Faceta','Quarzo','Opalo','Vitre']
+};
+const NAME_ROOT = {
+  dragon:['drak','saur','wyrm','draco','fang'],
+  serpiente:['naga','sier','ofis','coatl','vibra'],
+  ave:['aleon','pluma','alcón','avian','falco'],
+  escorpion:['scorp','pincer','aguij','carax'],
+  espiritu:['sylva','duende','ent','faun'],
+  bestiamar:['leviat','kraken','tiburo','nauti'],
+  tortuga:['testudo','carapax','concha'],
+  cangrejo:['carcin','pinzon','krab'],
+  mariposa:['lepido','alara','polil'],
+  murcielago:['noctu','vamp','quiro'],
+  guardian:['cervun','guardi','silvan'],
+  lobo:['lupus','fenrik','canis'],
+  golem:['golem','magma','forja'],
+  electrico:['volt','amperi','chispon'],
+  espacial:['astro','cosmo','nebula'],
+  celestial:['seraf','angel','estela'],
+  cristal:['gema','cristo','facet'],
+  plantaviva:['flora','brota','raizal'],
+  fantasma:['fantom','espectro','anima'],
+  titan:['titan','coloso','monolit']
+};
+const NAME_SUFFIX_BY_RARITY = {
+  comun:['','ín','ete'], pococomun:['ón','ino'], rara:['ar','iz'], epica:['ion','ivo'],
+  legendaria:['ANCESTRAL','REAL'], mitica:['ETERNO','MITICO'], omega:['OMEGA'],
+  prohibida:['PROHIBIDO'], secreta:['ENIGMA'], divina:['DIVINO']
+};
+function titleCase(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+function generateSpeciesName(rng, element, archetypeId, rarity){
+  const p = rngPick(rng, NAME_PREFIX[element]);
+  const r = rngPick(rng, NAME_ROOT[archetypeId]);
+  let base = titleCase((p+r).toLowerCase());
+  const sufBank = NAME_SUFFIX_BY_RARITY[rarity] || [''];
+  const suf = rngPick(rng, sufBank);
+  if(rarity==='legendaria' || rarity==='mitica' || rarity==='prohibida' || rarity==='divina'){
+    return base+' '+suf;
+  }
+  if(rarity==='omega') return 'Omega '+base;
+  if(rarity==='secreta') return base+' (Enigma)';
+  if(suf) return base+suf;
+  return base;
+}
+
+/* =====================================================================
+   2. BIOMAS BASE, HÁBITATS, MOVIMIENTOS Y GENERADOR DE ESPECIES
+   ===================================================================== */
+const HABITATS = ['terrestre','acuatico','aereo','subterraneo','anfibio'];
+
+/* Metadatos de biomas (los 13 mundos). El detalle visual de cada mundo
+   (tiles, decorados, NPCs, tienda, jefe...) se define en la sección de mundos. */
+const BIOMES_META = [
+  {id:'bosque_verde',    name:'Bosque Verde',       order:0,  favoredElements:['planta','tierra','viento','electrico'], allowedHabitats:['terrestre','aereo']},
+  {id:'costa_cristalina',name:'Costa Cristalina',   order:1,  favoredElements:['agua','cristal','viento','luz'],        allowedHabitats:['acuatico','anfibio','aereo']},
+  {id:'pantano_oscuro',  name:'Pantano Oscuro',     order:2,  favoredElements:['veneno','sombra','planta','agua'],      allowedHabitats:['terrestre','anfibio']},
+  {id:'desierto_dorado', name:'Desierto Dorado',    order:3,  favoredElements:['tierra','fuego','electrico','luz'],     allowedHabitats:['terrestre','subterraneo']},
+  {id:'jungla_perdida',  name:'Jungla Perdida',     order:4,  favoredElements:['planta','veneno','electrico','agua'],   allowedHabitats:['terrestre','aereo','anfibio']},
+  {id:'montana_helada',  name:'Montaña Helada',     order:5,  favoredElements:['hielo','viento','cristal','tierra'],    allowedHabitats:['terrestre','aereo']},
+  {id:'volcan_carmesi',  name:'Volcán Carmesí',     order:6,  favoredElements:['fuego','tierra','sombra','cristal'],    allowedHabitats:['terrestre','subterraneo']},
+  {id:'islas_flotantes', name:'Islas Flotantes',    order:7,  favoredElements:['viento','electrico','luz','arcano'],    allowedHabitats:['aereo','terrestre']},
+  {id:'oceano_profundo', name:'Océano Profundo',    order:8,  favoredElements:['agua','hielo','sombra','veneno'],       allowedHabitats:['acuatico']},
+  {id:'ruinas_antiguas', name:'Ruinas Antiguas',    order:9,  favoredElements:['tierra','arcano','sombra','cristal'],   allowedHabitats:['terrestre','subterraneo']},
+  {id:'bosque_encantado',name:'Bosque Encantado',   order:10, favoredElements:['arcano','planta','luz','viento'],       allowedHabitats:['terrestre','aereo']},
+  {id:'cielo_celestial', name:'Cielo Celestial',    order:11, favoredElements:['luz','viento','arcano','electrico'],    allowedHabitats:['aereo']},
+  {id:'abismo_vacio',    name:'Abismo del Vacío',   order:12, favoredElements:['sombra','arcano','cristal','veneno'],   allowedHabitats:['terrestre','aereo','acuatico','subterraneo']}
+];
+const BIOME_BY_ID = Object.fromEntries(BIOMES_META.map(b=>[b.id,b]));
+
+const ARCHETYPE_HABITAT = {
+  dragon:'aereo', serpiente:'terrestre', ave:'aereo', escorpion:'terrestre', espiritu:'terrestre',
+  bestiamar:'acuatico', tortuga:'anfibio', cangrejo:'anfibio', mariposa:'aereo', murcielago:'aereo',
+  guardian:'terrestre', lobo:'terrestre', golem:'terrestre', electrico:'terrestre', espacial:'aereo',
+  celestial:'aereo', cristal:'terrestre', plantaviva:'terrestre', fantasma:'terrestre', titan:'terrestre'
+};
+
+const BASIC_ATTACK_BY_BODY = {
+  reptil:'Mordisco', serpiente:'Constricción', ave:'Picotazo', artropodo:'Pinzada', fantasma:'Golpe Espectral',
+  acuatico:'Coletazo', caparazon:'Embestida', insecto:'Aguijonazo', volador:'Zarpazo Aéreo', cuadrupedo:'Embestida',
+  humanoide:'Puñetazo', esferico:'Impacto', etereo:'Toque Etéreo', geometrico:'Golpe Cristalino', planta:'Látigo'
+};
+
+const MOVE_BANK = {
+  fuego:   ['Llamarada','Bola de Fuego','Aliento Ardiente','Explosión Ígnea'],
+  agua:    ['Chorro de Agua','Ola Furiosa','Torrente','Vórtice Acuático'],
+  planta:  ['Látigo Cepa','Hojas Navaja','Espinas Venenosas','Floración Drenante'],
+  electrico:['Impacto Voltaico','Rayo','Sobrecarga','Chispa Paralizante'],
+  hielo:   ['Rayo Helado','Ventisca','Granizo Cortante','Sello Congelante'],
+  tierra:  ['Terremoto','Lanzarrocas','Onda Sísmica','Entierro'],
+  viento:  ['Ráfaga Cortante','Tornado','Vendaval','Ciclón Ascendente'],
+  sombra:  ['Golpe Umbrío','Onda Oscura','Garra Sombría','Pesadilla'],
+  luz:     ['Rayo Solar','Destello Cegador','Juicio Radiante','Pulso de Luz'],
+  arcano:  ['Pulso Arcano','Sello Místico','Distorsión','Runa Explosiva'],
+  veneno:  ['Mordisco Tóxico','Nube Venenosa','Ácido Corrosivo','Picadura Ponzoñosa'],
+  cristal: ['Filo de Cristal','Prisma Cortante','Esquirlas Voraces','Resonancia de Cuarzo']
+};
+const STATUS_BY_ELEMENT = {
+  fuego:'quemado', hielo:'congelado', electrico:'paralizado', veneno:'envenenado', planta:'dormido',
+  sombra:'miedo', arcano:'confuso', luz:'cegado', tierra:'aturdido', cristal:'defensabaja', agua:null, viento:null
+};
+const STATUS_LABEL = {
+  quemado:'Quemado', congelado:'Congelado', paralizado:'Paralizado', envenenado:'Envenenado', dormido:'Dormido',
+  miedo:'Asustado', confuso:'Confuso', cegado:'Cegado', aturdido:'Aturdido', defensabaja:'Defensa Baja'
+};
+
+function generateMoveset(rng, element, archetypeId){
+  const body = ARCHETYPES.find(a=>a.id===archetypeId).body;
+  const basic = {name:BASIC_ATTACK_BY_BODY[body]||'Golpe', power:38, acc:100, element, kind:'basico', unlockLevel:1, status:null};
+  const bank = MOVE_BANK[element];
+  const unlockLevels = [1,7,15,24];
+  const powers = [58,76,68,94];
+  const accs = [100,95,90,85];
+  const specials = bank.map((name,i)=>({
+    name, power:powers[i], acc:accs[i], element, kind:'especial', unlockLevel:unlockLevels[i],
+    status: i===2 ? {id:STATUS_BY_ELEMENT[element], chance:0.32} : null
+  })).filter(m=>m.status===null || m.status.id);
+  return [basic, ...specials];
+}
+
+const PERSONALITIES = ['Tímida','Curiosa','Agresiva','Juguetona','Territorial','Serena','Traviesa','Solitaria','Leal','Errática','Orgullosa','Melancólica','Valiente','Astuta','Amistosa'];
+const FLAVOR_TEMPLATES = [
+  'Se dice que puede sentir el peligro mucho antes de que llegue.',
+  'Suele reunirse en pequeños grupos al atardecer.',
+  'Sus marcas cambian ligeramente de tono según su estado de ánimo.',
+  'Es capaz de pasar desapercibida entre la vegetación o el terreno.',
+  'Los exploradores la consideran un buen augurio si se deja ver.',
+  'Rara vez se aleja del lugar donde nació.',
+  'Emite un sonido característico cuando se siente amenazada.',
+  'Guarda una relación especial con las criaturas de su mismo elemento.',
+  'Algunos ancianos cuentan historias antiguas sobre su origen.',
+  'Puede pasar largos periodos sin moverse, observando su entorno.',
+  'Es más activa cuando el clima de su hábitat cambia bruscamente.',
+  'Sus crías son extremadamente difíciles de encontrar.',
+  'Reacciona con curiosidad ante los objetos brillantes.',
+  'Marca su territorio con pequeñas señales que solo otros de su especie reconocen.',
+  'Se dice que su rugido puede escucharse desde muy lejos.'
+];
+
+function mixColor(rng, hex, amt){
+  const n = parseInt(hex.slice(1),16);
+  let r=(n>>16)&255, g=(n>>8)&255, b=n&255;
+  const dir = rng()<0.5 ? 255 : 0;
+  r = Math.round(lerp(r,dir,amt*rng())); g = Math.round(lerp(g,dir,amt*rng())); b = Math.round(lerp(b,dir,amt*rng()));
+  return '#'+[r,g,b].map(v=>clamp(v,0,255).toString(16).padStart(2,'0')).join('');
+}
+
+function biomesForSpecies(rng, element, habitat){
+  const scored = BIOMES_META.map(b=>{
+    let score = rng()*1.5;
+    if(b.favoredElements.includes(element)) score += 3;
+    if(b.allowedHabitats.includes(habitat)) score += 3;
+    return {b, score};
+  });
+  scored.sort((a,c)=>c.score-a.score);
+  const count = rng()<0.3 ? 2 : 1;
+  return scored.slice(0,count).map(s=>s.b.id);
+}
+
+function buildSpeciesRecord(rng, archetype, element, rarityId, tag){
+  const rarity = RARITY_BY_ID[rarityId];
+  const habitat = ARCHETYPE_HABITAT[archetype.id];
+  const name = generateSpeciesName(rng, element, archetype.id, rarityId);
+  const biomes = biomesForSpecies(rng, element, habitat);
+  const roleBase = ({
+    tanque:{hp:74,atk:44,def:58,spd:26}, veloz:{hp:44,atk:54,def:30,spd:68},
+    especial:{hp:50,atk:57,def:36,spd:48}, equilibrado:{hp:56,atk:50,def:44,spd:44}
+  })[archetype.role];
+  const rIdx = RARITY_ORDER.indexOf(rarityId);
+  const stats = {};
+  for(const k of ['hp','atk','def','spd']){
+    stats[k] = Math.round(roleBase[k]*rarity.statMult*rngRange(rng,0.92,1.1));
+  }
+  let timeOfDay = 'ambos';
+  if(element==='sombra' || archetype.id==='fantasma' || archetype.id==='murcielago') timeOfDay = rng()<0.75?'nocturno':'ambos';
+  else if(element==='luz' || archetype.id==='celestial') timeOfDay = rng()<0.75?'diurno':'ambos';
+  else { const rr = rng(); timeOfDay = rr<0.2?'diurno': rr<0.4?'nocturno':'ambos'; }
+  let weatherPref = null;
+  if(element==='agua' && rng()<0.12) weatherPref='lluvia';
+  else if(element==='hielo' && rng()<0.15) weatherPref='nieve';
+  else if(element==='luz' && rng()<0.1) weatherPref='luna_llena';
+  else if(element==='sombra' && rng()<0.15) weatherPref='niebla';
+  else if(element==='electrico' && rng()<0.12) weatherPref='tormenta';
+  const genome = {
+    body: archetype.body,
+    primary: mixColor(rng, ELEMENT_COLOR[element][0], 0.22),
+    secondary: mixColor(rng, ELEMENT_COLOR[element][1], 0.22),
+    pattern: rngPick(rng, ['liso','manchas','rayas','escamas','destellos']),
+    appendages: archetype.appendages,
+    eyeType: rngPick(rng, ['redondo','rasgado','brillante','multiple']),
+    sizeScale: 0.82 + rIdx*0.045 + rngRange(rng,-0.03,0.03),
+    aura: rIdx>=4
+  };
+  const personality = rngPick(rng, PERSONALITIES);
+  const flavor = rngPick(rng, FLAVOR_TEMPLATES);
+  const biomeNames = biomes.map(id=>BIOME_BY_ID[id].name).join(' y ');
+  const description = `${name} es una criatura de tipo ${element} de la familia "${archetype.label}". De personalidad ${personality.toLowerCase()}, habita principalmente en ${biomeNames}. ${flavor}`;
+  return {
+    id: 'sp_'+(tag||'')+'_'+hashStr(name+archetype.id+element+rarityId).toString(36),
+    dexNum: 0,
+    name, archetypeId:archetype.id, archetypeLabel:archetype.label, element, rarity:rarityId,
+    biomes, habitat, timeOfDay, weatherPref,
+    baseStats: stats,
+    moves: generateMoveset(rng, element, archetype.id),
+    genome, personality, description
+  };
+}
+
+function buildSpeciesCatalog(){
+  const catalog = [];
+  const seen = new Set();
+  // Ronda 1: todas las combinaciones arquetipo x elemento (240 especies base)
+  for(const archetype of ARCHETYPES){
+    for(const element of ELEMENTS){
+      const rng = mulberry32(hashStr('base_'+archetype.id+'_'+element+'_v1'));
+      const rarityId = choiceWeighted(rng, RARITIES.map(r=>({item:r.id, w:r.weight})));
+      const rec = buildSpeciesRecord(rng, archetype, element, rarityId, 'a');
+      if(!seen.has(rec.name)){ seen.add(rec.name); catalog.push(rec); }
+    }
+  }
+  // Ronda 2: especies exclusivas por bioma (6 por bioma => ~78 especies extra)
+  const exclusiveTiers = ['comun','pococomun','rara','epica','legendaria','mitica'];
+  const topTierRotation = ['omega','prohibida','secreta','divina'];
+  for(let bi=0; bi<BIOMES_META.length; bi++){
+    const biome = BIOMES_META[bi];
+    for(let k=0;k<6;k++){
+      const seed = 'excl_'+biome.id+'_'+k;
+      const rng = mulberry32(hashStr(seed));
+      const element = rngPick(rng, biome.favoredElements);
+      const compatible = ARCHETYPES.filter(a=>biome.allowedHabitats.includes(ARCHETYPE_HABITAT[a.id]));
+      const archetype = rngPick(rng, compatible.length?compatible:ARCHETYPES);
+      let rarityId = exclusiveTiers[k];
+      if(k===5 && bi>=9) rarityId = topTierRotation[(bi-9)%topTierRotation.length];
+      const rec = buildSpeciesRecord(rng, archetype, element, rarityId, 'x');
+      rec.biomes = [biome.id];
+      if(!seen.has(rec.name)){ seen.add(rec.name); catalog.push(rec); }
+    }
+  }
+  catalog.sort((a,b)=> RARITY_ORDER.indexOf(a.rarity)-RARITY_ORDER.indexOf(b.rarity) || a.name.localeCompare(b.name));
+  catalog.forEach((s,i)=> s.dexNum = i+1);
+  return catalog;
+}
+
+const SPECIES_CATALOG = buildSpeciesCatalog();
+const SPECIES_BY_ID = Object.fromEntries(SPECIES_CATALOG.map(s=>[s.id,s]));
+function speciesByBiome(biomeId){ return SPECIES_CATALOG.filter(s=>s.biomes.includes(biomeId)); }
+
+/* =====================================================================
+   3. OBJETOS, CÁPSULAS DE CAPTURA Y CONSUMIBLES
+   ===================================================================== */
+const CAPSULES = [
+  {id:'cap_basica',      name:'Cápsula Básica',      type:'capsula', price:50,   power:1.00, maxCap:0.92, desc:'Cápsula estándar. Ideal para criaturas comunes.'},
+  {id:'cap_reforzada',   name:'Cápsula Reforzada',   type:'capsula', price:150,  power:1.55, maxCap:0.86, desc:'Carcasa reforzada que mejora la captura de criaturas fuertes.'},
+  {id:'cap_marina',      name:'Cápsula Marina',      type:'capsula', price:180,  power:1.35, maxCap:0.86, habitatBonus:'acuatico', habitatMult:1.7, desc:'Sellada para resistir el agua. Muy eficaz con criaturas acuáticas.'},
+  {id:'cap_legendaria',  name:'Cápsula Legendaria',  type:'capsula', price:600,  power:2.25, maxCap:0.76, desc:'Forjada con materiales raros para desafiar a las criaturas más poderosas.'},
+  {id:'cap_dimensional', name:'Cápsula Dimensional', type:'capsula', price:1600, power:3.10, maxCap:0.66, desc:'Perfora la realidad misma. La cápsula más avanzada jamás creada.'}
+];
+const CONSUMABLES = [
+  {id:'pocion_pequena', name:'Poción Pequeña',   type:'pocion', price:40,  sellPrice:15, healPercent:0.30, desc:'Restaura el 30% de la vida de una criatura.'},
+  {id:'pocion_grande',  name:'Poción Grande',    type:'pocion', price:110, sellPrice:45, healPercent:0.70, desc:'Restaura el 70% de la vida de una criatura.'},
+  {id:'pocion_maxima',  name:'Poción Máxima',    type:'pocion', price:260, sellPrice:110,healPercent:1.00, desc:'Restaura toda la vida de una criatura.'},
+  {id:'antidoto',       name:'Antídoto',         type:'pocion', price:60,  sellPrice:20, cureStatus:true, desc:'Cura cualquier estado alterado.'},
+  {id:'revivir',        name:'Revivir',          type:'pocion', price:220, sellPrice:80, revive:true, healPercent:0.5, desc:'Revive a una criatura debilitada con la mitad de su vida.'},
+  {id:'comida_basica',  name:'Bayas Silvestres', type:'comida', price:20,  sellPrice:6,  healPercent:0.15, desc:'Alimento sencillo. Restaura algo de vida y anima a tu criatura.'}
+];
+const MATERIALS = [
+  {id:'mat_escama',  name:'Escama Reluciente',      type:'material', sellPrice:15, desc:'Escama desprendida de una criatura salvaje.'},
+  {id:'mat_garra',   name:'Garra Afilada',          type:'material', sellPrice:18, desc:'Una garra resistente, apreciada por herreros.'},
+  {id:'mat_esencia', name:'Esencia Elemental',      type:'material', sellPrice:32, desc:'Energía concentrada de un elemento puro.'},
+  {id:'mat_cristal', name:'Fragmento de Cristal',   type:'material', sellPrice:48, desc:'Fragmento brillante con propiedades desconocidas.'},
+  {id:'mat_pluma',   name:'Pluma Brillante',        type:'material', sellPrice:22, desc:'Pluma que nunca pierde su brillo.'}
+];
+const UPGRADES = [
+  {id:'mejora_bolsa', name:'Bolsa Mejorada', type:'mejora', price:400, desc:'Aumenta la capacidad máxima de cada objeto en tu inventario.'}
+];
+const KEY_ITEMS = BIOMES_META.map(b=>({
+  id:'llave_'+b.id, name:'Llave de '+b.name, type:'llave', sellPrice:0,
+  desc:'Artefacto obtenido al derrotar al guardián de '+b.name+'. Desbloquea la siguiente región.'
+}));
+const ITEMS_CATALOG = [...CAPSULES, ...CONSUMABLES, ...MATERIALS, ...UPGRADES, ...KEY_ITEMS];
+const ITEM_BY_ID = Object.fromEntries(ITEMS_CATALOG.map(i=>[i.id,i]));
+function keyItemName(biomeId){ return 'Llave de '+BIOME_BY_ID[biomeId].name; }
+
+/* =====================================================================
+   4. MUNDOS: PARÁMETROS DE MAPA, NPCS, TIENDAS, JEFES, MISIONES Y LOGROS
+   ===================================================================== */
+const TILE = 32;
+const MAP_W = 46, MAP_H = 46;
+
+/* Parámetros de generación de mapa por bioma */
+const BIOME_MAP_PARAMS = {
+  bosque_verde:    {ground:'pasto', altGround:'pasto_alto', water:'agua', waterStyle:'river', obstacle:'arbol', obstacleDensity:0.10,
+                     decor:[{t:'arbol',w:34,blocking:true},{t:'flor',w:20,blocking:false},{t:'hierba_alta',w:26,blocking:false},{t:'roca_peq',w:10,blocking:false}]},
+  costa_cristalina:{ground:'arena', altGround:'pasto', water:'agua', waterStyle:'ocean', obstacle:'roca', obstacleDensity:0.05,
+                     decor:[{t:'palmera',w:22,blocking:true},{t:'concha',w:16,blocking:false},{t:'cristal_suelo',w:14,blocking:false},{t:'flor',w:10,blocking:false}]},
+  pantano_oscuro:  {ground:'lodo', altGround:'hierba_alta', water:'agua_turbia', waterStyle:'lake', obstacle:'arbol_muerto', obstacleDensity:0.14,
+                     decor:[{t:'arbol_muerto',w:30,blocking:true},{t:'hongo',w:22,blocking:false},{t:'niebla_suelo',w:18,blocking:false},{t:'raiz',w:12,blocking:false}]},
+  desierto_dorado: {ground:'arena', altGround:'arena_dura', water:'agua', waterStyle:'lake', obstacle:'cactus', obstacleDensity:0.08,
+                     decor:[{t:'cactus',w:26,blocking:true},{t:'roca_desierto',w:20,blocking:true},{t:'hueso',w:10,blocking:false},{t:'duna',w:16,blocking:false}]},
+  jungla_perdida:  {ground:'pasto_jungla', altGround:'pasto_alto', water:'agua', waterStyle:'river', obstacle:'arbol_jungla', obstacleDensity:0.18,
+                     decor:[{t:'arbol_jungla',w:36,blocking:true},{t:'liana',w:16,blocking:false},{t:'flor_exotica',w:14,blocking:false},{t:'ruinas_peq',w:8,blocking:false}]},
+  montana_helada:  {ground:'nieve', altGround:'hielo_suelo', water:'agua_helada', waterStyle:'lake', obstacle:'roca_nieve', obstacleDensity:0.14,
+                     decor:[{t:'pino_nevado',w:30,blocking:true},{t:'roca_nieve',w:20,blocking:true},{t:'cristal_hielo',w:14,blocking:false},{t:'huella',w:8,blocking:false}]},
+  volcan_carmesi:  {ground:'roca_volcanica', altGround:'ceniza', water:'lava', waterStyle:'lava_river', obstacle:'roca_volcanica_grande', obstacleDensity:0.16,
+                     decor:[{t:'roca_volcanica_grande',w:28,blocking:true},{t:'grieta_lava',w:16,blocking:false},{t:'humo',w:14,blocking:false},{t:'cristal_obsidiana',w:10,blocking:false}]},
+  islas_flotantes: {ground:'pasto_celeste', altGround:'nube_suelo', water:'vacio', waterStyle:'void_gap', obstacle:'roca_flotante', obstacleDensity:0.10,
+                     decor:[{t:'roca_flotante',w:24,blocking:true},{t:'flor_viento',w:18,blocking:false},{t:'nube_suelo',w:20,blocking:false}]},
+  oceano_profundo: {ground:'arena_marina', altGround:'coral_suelo', water:'agua_profunda', waterStyle:'full_water', obstacle:'coral',obstacleDensity:0.10,
+                     decor:[{t:'coral',w:30,blocking:true},{t:'alga',w:22,blocking:false},{t:'perla',w:8,blocking:false}]},
+  ruinas_antiguas: {ground:'piedra_ruinas', altGround:'arena', water:'agua', waterStyle:'lake', obstacle:'columna_rota', obstacleDensity:0.14,
+                     decor:[{t:'columna_rota',w:28,blocking:true},{t:'estatua',w:14,blocking:true},{t:'runa_suelo',w:18,blocking:false},{t:'hierba_alta',w:12,blocking:false}]},
+  bosque_encantado:{ground:'pasto_magico', altGround:'pasto_alto', water:'agua_magica', waterStyle:'river', obstacle:'arbol_magico', obstacleDensity:0.14,
+                     decor:[{t:'arbol_magico',w:30,blocking:true},{t:'hongo_luminoso',w:20,blocking:false},{t:'flor_magica',w:20,blocking:false},{t:'portal_menor',w:6,blocking:false}]},
+  cielo_celestial: {ground:'nube_densa', altGround:'nube_suelo', water:'vacio', waterStyle:'void_gap', obstacle:'pilar_luz', obstacleDensity:0.08,
+                     decor:[{t:'pilar_luz',w:22,blocking:true},{t:'estrella_suelo',w:24,blocking:false},{t:'nube_suelo',w:18,blocking:false}]},
+  abismo_vacio:    {ground:'piedra_abismal', altGround:'ceniza', water:'vacio_oscuro', waterStyle:'lake', obstacle:'espina_abismal', obstacleDensity:0.16,
+                     decor:[{t:'espina_abismal',w:30,blocking:true},{t:'ojo_flotante',w:10,blocking:false},{t:'grieta_vacio',w:20,blocking:false},{t:'cristal_oscuro',w:14,blocking:false}]}
+};
+
+/* Tiles caminables (todo lo que no aparezca aquí como agua/obstáculo especial se considera transitable) */
+const NON_WALKABLE_BASE = new Set(['agua','agua_turbia','agua_helada','agua_profunda','lava','vacio','vacio_oscuro','agua_magica']);
+
+/* Colores de tiles para el renderizado (2 tonos para dar textura tipo damero) */
+const TILE_COLORS = {
+  pasto:['#3a8a4a','#357e43'], pasto_alto:['#2f7a40','#2a6f39'], pasto_jungla:['#1f7a3a','#1c6f34'],
+  pasto_magico:['#3a6a9a','#355f8c'], pasto_celeste:['#7fb8e8','#74acdd'], nube_densa:['#dfe9fb','#d2ddf2'],
+  arena:['#dfc074','#d4b567'], arena_dura:['#c9a75f','#bd9c56'], arena_marina:['#e8d29a','#dcc78d'],
+  nieve:['#eef6ff','#e1eefc'], hielo_suelo:['#cdeeff','#bfe6fb'], lodo:['#5b4a34','#52422e'],
+  roca_volcanica:['#3a2620','#33201b'], ceniza:['#514844','#493f3b'], piedra_ruinas:['#8a8474','#7d7768'],
+  piedra_abismal:['#221228','#1b0e20'], hierba_alta:['#2c6b3a','#275f33'],
+  agua:['#3d8fd6','#3680c4'], agua_turbia:['#3a5240','#334a39'], agua_helada:['#8fd6f0','#82c9e6'],
+  lava:['#e8531f','#d5451a'], vacio:['#0b0e1c','#0b0e1c'], vacio_oscuro:['#160a1e','#130818'],
+  agua_profunda:['#1a4a8f','#164080'], agua_magica:['#5a6fdb','#5064c9'],
+  roca:['#7c7c7c','#6f6f6f']
+};
+function tileBaseColors(t){ return TILE_COLORS[t] || ['#444','#3c3c3c']; }
+
+/* Decoración: color/forma simple para cada tipo (dibujado procedimentalmente) */
+const DECOR_STYLE = {
+  arbol:{shape:'tree', trunk:'#5a3d23', leaf:'#2f7a3d'}, arbol_muerto:{shape:'deadtree', trunk:'#4a3f38', leaf:'#463b32'},
+  arbol_jungla:{shape:'tree', trunk:'#4a3018', leaf:'#146b2e'}, arbol_magico:{shape:'tree', trunk:'#5a4a8a', leaf:'#8a6fe0'},
+  palmera:{shape:'palm', trunk:'#8a6a3a', leaf:'#3a9a4a'}, pino_nevado:{shape:'pine', trunk:'#5a4a3a', leaf:'#e8f4ff'},
+  cactus:{shape:'cactus', trunk:'#3a7a3a', leaf:'#3a7a3a'}, flor:{shape:'flower', trunk:'#3a7a3a', leaf:'#ff8fc7'},
+  flor_exotica:{shape:'flower', trunk:'#2f6b30', leaf:'#ffd23f'}, flor_magica:{shape:'flower', trunk:'#5a4a8a', leaf:'#c084fc'},
+  flor_viento:{shape:'flower', trunk:'#7fb8e8', leaf:'#ffffff'}, hierba_alta:{shape:'grasspatch', trunk:'', leaf:'#2c6b3a'},
+  roca_peq:{shape:'rock', trunk:'', leaf:'#8a8a8a'}, roca_desierto:{shape:'rock', trunk:'', leaf:'#a68655'},
+  roca_nieve:{shape:'rock', trunk:'', leaf:'#d7e8f5'}, roca_volcanica_grande:{shape:'rock', trunk:'', leaf:'#2a1a15'},
+  roca_flotante:{shape:'floatrock', trunk:'', leaf:'#5a6a8a'}, columna_rota:{shape:'pillar', trunk:'', leaf:'#9a9484'},
+  estatua:{shape:'statue', trunk:'', leaf:'#7a7466'}, espina_abismal:{shape:'spike', trunk:'', leaf:'#3a1a4a'},
+  coral:{shape:'coral', trunk:'', leaf:'#ff6f91'}, hongo:{shape:'mushroom', trunk:'#cfcfcf', leaf:'#8a3a5a'},
+  hongo_luminoso:{shape:'mushroom', trunk:'#cfe8ff', leaf:'#c084fc'}, concha:{shape:'shell', trunk:'', leaf:'#ffe8d0'},
+  cristal_suelo:{shape:'crystal', trunk:'', leaf:'#8fe8ff'}, cristal_hielo:{shape:'crystal', trunk:'', leaf:'#cdeeff'},
+  cristal_obsidiana:{shape:'crystal', trunk:'', leaf:'#7a2fa0'}, cristal_oscuro:{shape:'crystal', trunk:'', leaf:'#4a1a6a'},
+  liana:{shape:'vine', trunk:'', leaf:'#1f7a3a'}, ruinas_peq:{shape:'pillar', trunk:'', leaf:'#7a7468'},
+  duna:{shape:'dune', trunk:'', leaf:'#d4b567'}, hueso:{shape:'bone', trunk:'', leaf:'#e8e0c8'},
+  raiz:{shape:'vine', trunk:'', leaf:'#4a3f2e'}, niebla_suelo:{shape:'fog', trunk:'', leaf:'#6b7a72'},
+  grieta_lava:{shape:'crack', trunk:'', leaf:'#ff7a2f'}, humo:{shape:'fog', trunk:'', leaf:'#5a5a5a'},
+  nube_suelo:{shape:'cloud', trunk:'', leaf:'#ffffff'}, estrella_suelo:{shape:'star', trunk:'', leaf:'#ffe98f'},
+  pilar_luz:{shape:'pillar', trunk:'', leaf:'#fff6c9'}, runa_suelo:{shape:'rune', trunk:'', leaf:'#c084fc'},
+  portal_menor:{shape:'star', trunk:'', leaf:'#67e8f9'}, ojo_flotante:{shape:'eye', trunk:'', leaf:'#ff3f6f'},
+  grieta_vacio:{shape:'crack', trunk:'', leaf:'#6a1a9a'}, alga:{shape:'vine', trunk:'', leaf:'#2f9a6a'},
+  perla:{shape:'shell', trunk:'', leaf:'#ffffff'}, huella:{shape:'fog', trunk:'', leaf:'#cfe8ff'}
+};
+
+/* ---- Generación procedimental del mapa de un mundo (determinista por bioma) ---- */
+function generateWorldMap(biomeId){
+  const params = BIOME_MAP_PARAMS[biomeId];
+  const rng = mulberry32(hashStr('worldmap_'+biomeId));
+  const tiles = new Array(MAP_H);
+  for(let y=0;y<MAP_H;y++){
+    tiles[y] = new Array(MAP_W).fill(params.ground);
+  }
+  // variación de suelo (parches de altGround)
+  for(let i=0;i<70;i++){
+    const cx=rngInt(rng,2,MAP_W-3), cy=rngInt(rng,2,MAP_H-3), rad=rngInt(rng,1,3);
+    for(let y=-rad;y<=rad;y++) for(let x=-rad;x<=rad;x++){
+      const yy=cy+y, xx=cx+x;
+      if(yy>0&&yy<MAP_H-1&&xx>0&&xx<MAP_W-1 && x*x+y*y<=rad*rad && rng()<0.55) tiles[yy][xx]=params.altGround;
+    }
+  }
+  // rasgo de agua/lava/vacío
+  if(params.waterStyle==='river' || params.waterStyle==='lava_river'){
+    let x = rngInt(rng, 6, MAP_W-6);
+    for(let y=0;y<MAP_H;y++){
+      x += rngInt(rng,-1,1); x = clamp(x,3,MAP_W-4);
+      for(let w=-1;w<=1;w++){ const xx=x+w; if(xx>0&&xx<MAP_W-1) tiles[y][xx]=params.water; }
+    }
+  } else if(params.waterStyle==='lake'){
+    const cx=rngInt(rng,MAP_W*0.3,MAP_W*0.7), cy=rngInt(rng,MAP_H*0.3,MAP_H*0.7), rad=rngInt(rng,6,9);
+    for(let y=-rad;y<=rad;y++) for(let x=-rad;x<=rad;x++){
+      const yy=Math.round(cy+y), xx=Math.round(cx+x);
+      if(yy>0&&yy<MAP_H-1&&xx>0&&xx<MAP_W-1 && x*x+y*y<=rad*rad*rngRange(rng,0.85,1.15)) tiles[yy][xx]=params.water;
+    }
+  } else if(params.waterStyle==='ocean' || params.waterStyle==='full_water'){
+    const bandStart = params.waterStyle==='full_water' ? 0 : Math.floor(MAP_H*0.62);
+    for(let y=bandStart;y<MAP_H;y++) for(let x=0;x<MAP_W;x++){
+      if(y> bandStart + rngInt(rng,-2,2) || params.waterStyle==='full_water') tiles[y][x]=params.water;
+    }
+  } else if(params.waterStyle==='void_gap'){
+    for(let i=0;i<8;i++){
+      const cx=rngInt(rng,3,MAP_W-4), cy=rngInt(rng,3,MAP_H-4), rad=rngInt(rng,2,4);
+      for(let y=-rad;y<=rad;y++) for(let x=-rad;x<=rad;x++){
+        const yy=cy+y, xx=cx+x;
+        if(yy>0&&yy<MAP_H-1&&xx>0&&xx<MAP_W-1 && x*x+y*y<=rad*rad) tiles[yy][xx]=params.water;
+      }
+    }
+  }
+  // camino central hacia la aldea
+  const villageX = Math.floor(MAP_W/2), villageY = Math.floor(MAP_H/2);
+  for(let y=Math.max(1,villageY-1); y<=Math.min(MAP_H-2,villageY+1); y++)
+    for(let x=Math.max(1,villageX-6); x<=Math.min(MAP_W-2,villageX+6); x++) tiles[y][x]='camino';
+  for(let y=Math.max(1,villageY-3); y<=Math.min(MAP_H-2,villageY+3); y++)
+    for(let x=Math.max(1,villageX-3); x<=Math.min(MAP_W-2,villageX+3); x++) tiles[y][x]='piso_aldea';
+
+  // obstáculos y decoración disperja
+  const decor = [];
+  const obstacles = new Set();
+  const weightTotal = params.decor.reduce((s,d)=>s+d.w,0);
+  for(let y=1;y<MAP_H-1;y++){
+    for(let x=1;x<MAP_W-1;x++){
+      const t = tiles[y][x];
+      if(t==='piso_aldea' || t==='camino') continue;
+      if(NON_WALKABLE_BASE.has(t)) continue;
+      if(rng() < 0.16){
+        let r = rng()*weightTotal, chosen = params.decor[0];
+        for(const d of params.decor){ if(r<d.w){ chosen=d; break;} r-=d.w; }
+        decor.push({x,y,type:chosen.t});
+        if(chosen.blocking) obstacles.add(x+','+y);
+      }
+    }
+  }
+  // zona de ruinas ocultas (mitad de biomas) -> misión "descubre un templo oculto"
+  let ruinSpot = null;
+  const rngRuin = mulberry32(hashStr('ruin_'+biomeId));
+  if(rngRuin() < 0.65 || biomeId==='ruinas_antiguas'){
+    let rx,ry, tries=0;
+    do { rx = rngInt(rngRuin,4,MAP_W-5); ry = rngInt(rngRuin,4,MAP_H-5); tries++; }
+    while(tries<40 && (Math.abs(rx-villageX)<8 && Math.abs(ry-villageY)<8));
+    for(let y=-2;y<=2;y++) for(let x=-2;x<=2;x++){
+      const yy=ry+y, xx=rx+x;
+      if(yy>0&&yy<MAP_H-1&&xx>0&&xx<MAP_W-1 && !NON_WALKABLE_BASE.has(tiles[yy][xx])) tiles[yy][xx]='piedra_ruinas';
+    }
+    ruinSpot = {x:rx,y:ry};
+  }
+  // punto del jefe (arena despejada en un extremo)
+  const bossSpot = {x: MAP_W-5, y: 4};
+  for(let y=-2;y<=2;y++) for(let x=-2;x<=2;x++){
+    const yy=bossSpot.y+y, xx=bossSpot.x+x;
+    if(yy>0&&yy<MAP_H-1&&xx>0&&xx<MAP_W-1) obstacles.delete(xx+','+yy);
+  }
+  // portal de salida (a la esquina opuesta del jefe)
+  const portalSpot = {x:4, y:MAP_H-5};
+  obstacles.delete(portalSpot.x+','+portalSpot.y);
+  tiles[portalSpot.y][portalSpot.x]='portal';
+  for(let y=-1;y<=1;y++) for(let x=-1;x<=1;x++){ obstacles.delete((portalSpot.x+x)+','+(portalSpot.y+y)); }
+
+  return {
+    biomeId, tiles, width:MAP_W, height:MAP_H, decor, obstacles,
+    village:{x:villageX,y:villageY}, ruinSpot, bossSpot, portalSpot,
+    ground: params.ground
+  };
+}
+
+/* ---- Generadores de plantillas de NPC ---- */
+function makeWorldNPCs(biomeId, worldName, bossName, elderLine, explorerLine){
+  return [
+    {id:biomeId+'_anciano', name:'Anciano Explorador', role:'sabio', x:0, y:-2,
+     lines:[ elderLine, `${worldName} esconde muchos secretos para quien sepa mirar.`, 'Cuida siempre de tus criaturas; ellas cuidarán de ti.'],
+     quest:biomeId+'_q_talk'},
+    {id:biomeId+'_comerciante', name:'Comerciante Itinerante', role:'comerciante', x:2, y:0,
+     lines:['¡Bienvenido a mi tienda! Tengo justo lo que necesitas.'], shop:true},
+    {id:biomeId+'_viajero', name:'Viajero', role:'viajero', x:-2, y:2,
+     lines:[ explorerLine, `Dicen que ${bossName} vigila esta región. No es fácil de encontrar... ni de vencer.` ]}
+  ];
+}
+
+const WORLD_FLAVOR = {
+  bosque_verde:    {elder:'He recorrido este bosque durante cuarenta años y aún encuentro criaturas nuevas.', explorer:'Escuché un rugido cerca del claro este esta mañana.'},
+  costa_cristalina:{elder:'Las mareas traen criaturas que no se ven en ningún otro lugar.', explorer:'El agua brilla de un modo extraño cerca de los arrecifes.'},
+  pantano_oscuro:  {elder:'No todo lo que acecha en la niebla es hostil... pero tampoco es amistoso.', explorer:'Perdí mi linterna aquí. No pienso volver a buscarla de noche.'},
+  desierto_dorado: {elder:'Bajo la arena dorada duermen ruinas más antiguas que cualquier reino.', explorer:'Las tormentas de arena esconden más de lo que revelan.'},
+  jungla_perdida:  {elder:'La jungla crece más rápido de lo que se puede talar. Respétala.', explorer:'Encontré huellas enormes entre las lianas ayer.'},
+  montana_helada:  {elder:'El frío aquí pone a prueba tanto a criaturas como a exploradores.', explorer:'Vi una silueta blanca moverse entre la ventisca.'},
+  volcan_carmesi:  {elder:'El fuego de este volcán lleva ardiendo desde antes de que naciera mi abuelo.', explorer:'El calor aquí es insoportable, pero las criaturas parecen disfrutarlo.'},
+  islas_flotantes: {elder:'Nadie sabe qué mantiene estas islas suspendidas en el cielo.', explorer:'Si te asomas al borde, el vértigo es real. Ten cuidado.'},
+  oceano_profundo: {elder:'Las profundidades esconden criaturas que ni los pescadores más viejos han visto.', explorer:'Cuanto más profundo buceas, más extraño se vuelve todo.'},
+  ruinas_antiguas: {elder:'Estas ruinas pertenecían a una civilización que dominaba la magia arcana.', explorer:'Las runas de estos muros parecen brillar cuando alguien se acerca.'},
+  bosque_encantado:{elder:'La magia de este bosque responde a quienes actúan con buen corazón.', explorer:'Los árboles aquí a veces... susurran. No estoy loco, lo juro.'},
+  cielo_celestial: {elder:'Solo quienes han demostrado su valía llegan tan alto.', explorer:'El aire aquí se siente cargado de una energía pura.'},
+  abismo_vacio:    {elder:'Más allá de este punto, las reglas del mundo dejan de aplicarse.', explorer:'No debería seguir explorando esto... pero no puedo evitarlo.'}
+};
+
+const BOSS_TIER_BY_ORDER = ['legendaria','legendaria','legendaria','mitica','mitica','mitica','omega','omega','omega','prohibida','prohibida','secreta','divina'];
+
+/* Construye definiciones completas de mundo (npcs, tienda, jefe) a partir de biomas */
+function buildWorldDefs(){
+  const defs = {};
+  for(const b of BIOMES_META){
+    const flavor = WORLD_FLAVOR[b.id];
+    const archetype = rngPick(mulberry32(hashStr('bossarch_'+b.id)), ARCHETYPES.filter(a=>b.allowedHabitats.includes(ARCHETYPE_HABITAT[a.id])));
+    const element = rngPick(mulberry32(hashStr('bossel_'+b.id)), b.favoredElements);
+    const bossRng = mulberry32(hashStr('boss_'+b.id));
+    const bossRarity = BOSS_TIER_BY_ORDER[b.order];
+    const bossRec = buildSpeciesRecord(bossRng, archetype, element, bossRarity, 'boss');
+    bossRec.biomes = [b.id];
+    bossRec.isBoss = true;
+    bossRec.name = bossRec.name + ' — Guardián de ' + b.name;
+    SPECIES_CATALOG.push(bossRec);
+    SPECIES_BY_ID[bossRec.id] = bossRec;
+    defs[b.id] = {
+      id:b.id, name:b.name, order:b.order,
+      npcs: makeWorldNPCs(b.id, b.name, bossRec.name, flavor.elder, flavor.explorer),
+      bossSpeciesId: bossRec.id,
+      bossLevel: 12 + b.order*6,
+      keyItemId: 'llave_'+b.id
+    };
+  }
+  // renumerar dex incluyendo jefes al final
+  let n = SPECIES_CATALOG.filter(s=>!s.isBoss).length;
+  SPECIES_CATALOG.filter(s=>s.isBoss).forEach(s=>{ s.dexNum = ++n; });
+  return defs;
+}
+const WORLD_DEFS = buildWorldDefs();
+const WORLD_ORDER_LIST = BIOMES_META.slice().sort((a,c)=>a.order-c.order).map(b=>b.id);
+function nextWorldId(biomeId){
+  const b = BIOME_BY_ID[biomeId];
+  const idx = WORLD_ORDER_LIST.indexOf(biomeId);
+  return idx < WORLD_ORDER_LIST.length-1 ? WORLD_ORDER_LIST[idx+1] : null;
+}
+
+/* ---------------------------------------------------------------------
+   MISIONES
+   --------------------------------------------------------------------- */
+const QUESTS = [
+  {id:'q_intro_capture', title:'Tu primera captura', giverWorld:'bosque_verde', giverNpcId:'bosque_verde_anciano',
+   desc:'Captura tu primera criatura salvaje.', type:'capture_any', target:1,
+   reward:{coins:100, items:[{id:'cap_basica',qty:3}]}},
+  {id:'q_intro_talk', title:'Consejo del anciano', giverWorld:'bosque_verde', giverNpcId:'bosque_verde_anciano',
+   desc:'Habla con el Anciano Explorador del Bosque Verde.', type:'talk_npc', target:'bosque_verde_anciano',
+   reward:{coins:50}},
+  {id:'q_bosque_boss', title:'El guardián del bosque', giverWorld:'bosque_verde', giverNpcId:'bosque_verde_viajero',
+   desc:'Derrota al jefe del Bosque Verde.', type:'defeat_boss', target:'bosque_verde',
+   reward:{coins:300, items:[{id:'pocion_grande',qty:2}]}},
+  {id:'q_bosque_ruin', title:'El templo oculto', giverWorld:'bosque_verde', giverNpcId:'bosque_verde_viajero',
+   desc:'Descubre el templo en ruinas oculto en el Bosque Verde.', type:'discover_ruin', target:'bosque_verde',
+   reward:{coins:120}},
+  {id:'q_costa_water', title:'Criatura del mar', giverWorld:'costa_cristalina', giverNpcId:'costa_cristalina_anciano',
+   desc:'Captura una criatura de hábitat acuático.', type:'capture_habitat', target:'acuatico',
+   reward:{coins:150, items:[{id:'cap_marina',qty:2}]}},
+  {id:'q_costa_boss', title:'La guardiana de la costa', giverWorld:'costa_cristalina', giverNpcId:'costa_cristalina_viajero',
+   desc:'Derrota al jefe de la Costa Cristalina.', type:'defeat_boss', target:'costa_cristalina',
+   reward:{coins:350, items:[{id:'pocion_grande',qty:2}]}},
+  {id:'q_pantano_rare', title:'Cazador de rarezas', giverWorld:'pantano_oscuro', giverNpcId:'pantano_oscuro_anciano',
+   desc:'Captura una criatura de rareza Rara o superior.', type:'capture_rarity', target:'rara',
+   reward:{coins:200}},
+  {id:'q_pantano_boss', title:'El horror del pantano', giverWorld:'pantano_oscuro', giverNpcId:'pantano_oscuro_viajero',
+   desc:'Derrota al jefe del Pantano Oscuro.', type:'defeat_boss', target:'pantano_oscuro',
+   reward:{coins:380}},
+  {id:'q_desierto_collect', title:'Coleccionista del desierto', giverWorld:'desierto_dorado', giverNpcId:'desierto_dorado_anciano',
+   desc:'Captura 5 criaturas distintas del Desierto Dorado.', type:'complete_biome_collection', target:'desierto_dorado', count:5,
+   reward:{coins:250, items:[{id:'cap_reforzada',qty:3}]}},
+  {id:'q_desierto_boss', title:'El titán dorado', giverWorld:'desierto_dorado', giverNpcId:'desierto_dorado_viajero',
+   desc:'Derrota al jefe del Desierto Dorado.', type:'defeat_boss', target:'desierto_dorado',
+   reward:{coins:420}},
+  {id:'q_jungla_legend', title:'Leyenda de la jungla', giverWorld:'jungla_perdida', giverNpcId:'jungla_perdida_anciano',
+   desc:'Encuentra y captura una criatura Legendaria.', type:'capture_rarity', target:'legendaria',
+   reward:{coins:500, items:[{id:'cap_legendaria',qty:1}]}},
+  {id:'q_jungla_boss', title:'El coloso de la jungla', giverWorld:'jungla_perdida', giverNpcId:'jungla_perdida_viajero',
+   desc:'Derrota al jefe de la Jungla Perdida.', type:'defeat_boss', target:'jungla_perdida',
+   reward:{coins:460}},
+  {id:'q_montana_collect', title:'Fauna helada', giverWorld:'montana_helada', giverNpcId:'montana_helada_anciano',
+   desc:'Captura 5 criaturas distintas de la Montaña Helada.', type:'complete_biome_collection', target:'montana_helada', count:5,
+   reward:{coins:300}},
+  {id:'q_montana_boss', title:'El titán helado', giverWorld:'montana_helada', giverNpcId:'montana_helada_viajero',
+   desc:'Derrota al jefe de la Montaña Helada.', type:'defeat_boss', target:'montana_helada',
+   reward:{coins:520}},
+  {id:'q_volcan_boss', title:'El guardián del volcán', giverWorld:'volcan_carmesi', giverNpcId:'volcan_carmesi_viajero',
+   desc:'Derrota al jefe del Volcán Carmesí.', type:'defeat_boss', target:'volcan_carmesi',
+   reward:{coins:600, items:[{id:'cap_legendaria',qty:1}]}},
+  {id:'q_islas_boss', title:'El señor del viento', giverWorld:'islas_flotantes', giverNpcId:'islas_flotantes_viajero',
+   desc:'Derrota al jefe de las Islas Flotantes.', type:'defeat_boss', target:'islas_flotantes',
+   reward:{coins:680}},
+  {id:'q_oceano_boss', title:'El leviatán abisal', giverWorld:'oceano_profundo', giverNpcId:'oceano_profundo_viajero',
+   desc:'Derrota al jefe del Océano Profundo.', type:'defeat_boss', target:'oceano_profundo',
+   reward:{coins:760}},
+  {id:'q_ruinas_boss', title:'El custodio ancestral', giverWorld:'ruinas_antiguas', giverNpcId:'ruinas_antiguas_viajero',
+   desc:'Derrota al jefe de las Ruinas Antiguas.', type:'defeat_boss', target:'ruinas_antiguas',
+   reward:{coins:850, items:[{id:'cap_dimensional',qty:1}]}},
+  {id:'q_encantado_boss', title:'El espíritu encantado', giverWorld:'bosque_encantado', giverNpcId:'bosque_encantado_viajero',
+   desc:'Derrota al jefe del Bosque Encantado.', type:'defeat_boss', target:'bosque_encantado',
+   reward:{coins:950}},
+  {id:'q_cielo_boss', title:'El heraldo celestial', giverWorld:'cielo_celestial', giverNpcId:'cielo_celestial_viajero',
+   desc:'Derrota al jefe del Cielo Celestial.', type:'defeat_boss', target:'cielo_celestial',
+   reward:{coins:1100}},
+  {id:'q_abismo_boss', title:'El ser del vacío', giverWorld:'abismo_vacio', giverNpcId:'abismo_vacio_viajero',
+   desc:'Derrota al jefe final del Abismo del Vacío.', type:'defeat_boss', target:'abismo_vacio',
+   reward:{coins:2000, items:[{id:'cap_dimensional',qty:2}]}},
+  {id:'q_dex_50', title:'Coleccionista aficionado', giverWorld:null, giverNpcId:null,
+   desc:'Registra 50 criaturas distintas en tu Enciclopedia.', type:'dex_count', target:50,
+   reward:{coins:300}},
+  {id:'q_dex_150', title:'Coleccionista experto', giverWorld:null, giverNpcId:null,
+   desc:'Registra 150 criaturas distintas en tu Enciclopedia.', type:'dex_count', target:150,
+   reward:{coins:900, items:[{id:'cap_legendaria',qty:2}]}}
+];
+const QUEST_BY_ID = Object.fromEntries(QUESTS.map(q=>[q.id,q]));
+
+/* ---------------------------------------------------------------------
+   LOGROS
+   --------------------------------------------------------------------- */
+const ACHIEVEMENTS = [
+  {id:'ach_first_capture', name:'Primera Captura', desc:'Captura tu primera criatura.', check:st=>st.totalCaptures>=1},
+  {id:'ach_10_captures', name:'Aprendiz de Explorador', desc:'Captura 10 criaturas.', check:st=>st.totalCaptures>=10},
+  {id:'ach_50_species', name:'50 Criaturas', desc:'Descubre 50 especies distintas.', check:st=>st.dex.size>=50},
+  {id:'ach_first_legendary', name:'Primera Legendaria', desc:'Captura tu primera criatura Legendaria o superior.', check:st=>st.caughtRarityMax && RARITY_ORDER.indexOf(st.caughtRarityMax)>=RARITY_ORDER.indexOf('legendaria')},
+  {id:'ach_first_boss', name:'Cazador de Jefes', desc:'Derrota a tu primer jefe de mundo.', check:st=>st.bossesDefeated.size>=1},
+  {id:'ach_all_bosses', name:'Azote de Titanes', desc:'Derrota a todos los jefes de los 13 mundos.', check:st=>st.bossesDefeated.size>=13},
+  {id:'ach_biome_complete', name:'Explorador Completista', desc:'Completa la colección de un bioma entero.', check:st=>st.biomesCompleted.size>=1},
+  {id:'ach_divine', name:'Toque Divino', desc:'Captura una criatura de rareza Divina.', check:st=>st.caughtRarityMax==='divina'},
+  {id:'ach_full_dex', name:'Enciclopedia Completa', desc:'Registra todas las criaturas conocidas.', check:st=>st.dex.size>=SPECIES_CATALOG.length},
+  {id:'ach_team_lvl50', name:'Equipo de Élite', desc:'Ten una criatura de nivel 50 o más en tu equipo.', check:st=>st.maxTeamLevel>=50},
+  {id:'ach_100_captures', name:'Coleccionista Nato', desc:'Captura 100 criaturas en total.', check:st=>st.totalCaptures>=100},
+  {id:'ach_all_worlds', name:'Trotamundos', desc:'Desbloquea los 13 mundos.', check:st=>st.unlockedWorldsCount>=13},
+  {id:'ach_rich', name:'Bolsillos Llenos', desc:'Acumula 5000 monedas.', check:st=>st.coins>=5000},
+  {id:'ach_100_species', name:'150 Criaturas', desc:'Descubre 150 especies distintas.', check:st=>st.dex.size>=150}
+];
+
+/* =====================================================================
+   5. ESTADO DE PARTIDA, INSTANCIAS DE CRIATURA Y GUARDADO (localStorage)
+   ===================================================================== */
+const SAVE_KEY = 'creature_realms_save_v1';
+
+function xpToNext(level){ return Math.round(24*Math.pow(level,1.35)) + 10; }
+function statsAtLevel(baseStats, level){
+  const growth = 1 + (level-1)*0.08;
+  return {
+    hp: Math.round(baseStats.hp*growth) + level*3,
+    atk: Math.round(baseStats.atk*growth),
+    def: Math.round(baseStats.def*growth),
+    spd: Math.round(baseStats.spd*growth)
+  };
+}
+function availableMoves(species, level){
+  return species.moves.filter(m=>m.unlockLevel<=level);
+}
+function createCreatureInstance(speciesId, level, opts){
+  opts = opts || {};
+  const species = SPECIES_BY_ID[speciesId];
+  const stats = statsAtLevel(species.baseStats, level);
+  return {
+    uid: uid('crt'),
+    speciesId, level,
+    xp: 0, xpNext: xpToNext(level),
+    stats,
+    currentHp: opts.currentHp!=null ? opts.currentHp : stats.hp,
+    status: null, statusTurns:0,
+    nickname: null,
+    caughtAt: opts.caughtAt || null,
+    happiness: 60
+  };
+}
+function creatureDisplayName(inst){ return inst.nickname || SPECIES_BY_ID[inst.speciesId].name; }
+function creatureMaxHp(inst){ return inst.stats.hp; }
+function isFainted(inst){ return inst.currentHp<=0; }
+
+function grantXp(inst, amount){
+  const species = SPECIES_BY_ID[inst.speciesId];
+  let leveled = false; const learned = [];
+  inst.xp += amount;
+  while(inst.xp >= inst.xpNext && inst.level < 100){
+    inst.xp -= inst.xpNext;
+    inst.level++;
+    const prevMoves = availableMoves(species, inst.level-1).length;
+    const newStats = statsAtLevel(species.baseStats, inst.level);
+    const hpDiff = newStats.hp - inst.stats.hp;
+    inst.stats = newStats;
+    inst.currentHp = Math.min(newStats.hp, inst.currentHp + hpDiff);
+    inst.xpNext = xpToNext(inst.level);
+    leveled = true;
+    const nowMoves = availableMoves(species, inst.level);
+    if(nowMoves.length>prevMoves) learned.push(nowMoves[nowMoves.length-1]);
+  }
+  return {leveled, learned};
+}
+
+/* ---------------------------------------------------------------------
+   Estado global de la partida
+   --------------------------------------------------------------------- */
+function defaultGameState(){
+  return {
+    version: 1,
+    coins: 150,
+    team: [],
+    box: [],
+    inventory: {cap_basica:5, pocion_pequena:3, comida_basica:3},
+    dex: {},                 // speciesId -> {seen,caught,timesCaught,highestLevel}
+    quests: {},              // questId -> {status:'active'|'completed', progress}
+    achievements: {},        // achId -> true
+    unlockedWorlds: ['bosque_verde'],
+    bossesDefeated: [],
+    ruinsDiscovered: [],
+    npcTalked: [],
+    biomeCollectionSeen: {}, // biomeId -> Set-like object of speciesId
+    currentWorld: 'bosque_verde',
+    playerPos: {x:23, y:26},
+    playerFacing: 'down',
+    clock: {day:1, hour:8, minute:0},
+    weather: {current:'despejado', timer: 240},
+    settings: {music:true, sfx:true, touch:('ontouchstart' in window)},
+    playtimeSeconds: 0,
+    starterSpeciesId: null,
+    activeTeamIndex: 0,
+    bagCapacityMult: 1
+  };
+}
+
+function migrateState(raw){
+  const def = defaultGameState();
+  const st = Object.assign({}, def, raw);
+  st.inventory = Object.assign({}, def.inventory, raw.inventory||{});
+  st.settings = Object.assign({}, def.settings, raw.settings||{});
+  st.clock = Object.assign({}, def.clock, raw.clock||{});
+  st.weather = Object.assign({}, def.weather, raw.weather||{});
+  st.playerPos = Object.assign({}, def.playerPos, raw.playerPos||{});
+  return st;
+}
+
+let gameState = null;
+let autosaveHandle = null;
+
+function saveGame(){
+  if(!gameState) return;
+  try{
+    localStorage.setItem(SAVE_KEY, JSON.stringify(gameState));
+    return true;
+  }catch(e){ console.warn('No se pudo guardar la partida', e); return false; }
+}
+function hasSaveGame(){
+  try{ return !!localStorage.getItem(SAVE_KEY); }catch(e){ return false; }
+}
+function loadGame(){
+  try{
+    const raw = JSON.parse(localStorage.getItem(SAVE_KEY));
+    if(!raw) return null;
+    return migrateState(raw);
+  }catch(e){ console.warn('Guardado corrupto', e); return null; }
+}
+function deleteSaveGame(){
+  try{ localStorage.removeItem(SAVE_KEY); }catch(e){}
+}
+function startAutosave(){
+  if(autosaveHandle) clearInterval(autosaveHandle);
+  autosaveHandle = setInterval(()=>{ saveGame(); }, 20000);
+}
+
+/* ---------------------------------------------------------------------
+   Helpers de estado: dex, inventario, misiones, logros
+   --------------------------------------------------------------------- */
+function ensureDexEntry(speciesId){
+  if(!gameState.dex[speciesId]) gameState.dex[speciesId] = {seen:false, caught:false, timesCaught:0, highestLevel:0};
+  return gameState.dex[speciesId];
+}
+function markSeen(speciesId){ ensureDexEntry(speciesId).seen = true; }
+function markCaught(speciesId, level){
+  const e = ensureDexEntry(speciesId);
+  e.seen = true; e.caught = true; e.timesCaught++; e.highestLevel = Math.max(e.highestLevel, level);
+}
+function invAdd(itemId, qty){
+  const cap = 99 * (gameState.bagCapacityMult||1);
+  gameState.inventory[itemId] = clamp((gameState.inventory[itemId]||0) + qty, 0, cap);
+}
+function invRemove(itemId, qty){
+  gameState.inventory[itemId] = Math.max(0, (gameState.inventory[itemId]||0) - qty);
+}
+function invCount(itemId){ return gameState.inventory[itemId]||0; }
+
+function dexCaughtCount(){ return Object.values(gameState.dex).filter(e=>e.caught).length; }
+function dexSeenOrCaughtCount(){ return Object.values(gameState.dex).filter(e=>e.seen||e.caught).length; }
+
+function achievementSnapshot(){
+  let caughtRarityMax = null, maxTeamLevel = 0, totalCaptures = 0;
+  for(const e of Object.values(gameState.dex)) totalCaptures += e.timesCaught;
+  for(const s of SPECIES_CATALOG){
+    const e = gameState.dex[s.id];
+    if(e && e.caught){
+      if(caughtRarityMax===null || RARITY_ORDER.indexOf(s.rarity)>RARITY_ORDER.indexOf(caughtRarityMax)) caughtRarityMax = s.rarity;
+    }
+  }
+  for(const c of [...gameState.team, ...gameState.box]) maxTeamLevel = Math.max(maxTeamLevel, c.level);
+  const biomesCompleted = new Set();
+  for(const b of BIOMES_META){
+    const species = speciesByBiome(b.id);
+    if(species.length && species.every(s=>gameState.dex[s.id] && gameState.dex[s.id].caught)) biomesCompleted.add(b.id);
+  }
+  return {
+    totalCaptures, dex:{size:dexCaughtCount()}, caughtRarityMax,
+    bossesDefeated:{size:gameState.bossesDefeated.length},
+    biomesCompleted, maxTeamLevel, unlockedWorldsCount:gameState.unlockedWorlds.length, coins:gameState.coins
+  };
+}
+function checkAchievements(){
+  const snap = achievementSnapshot();
+  const unlocked = [];
+  for(const a of ACHIEVEMENTS){
+    if(!gameState.achievements[a.id] && a.check(snap)){
+      gameState.achievements[a.id] = true;
+      unlocked.push(a);
+    }
+  }
+  return unlocked;
+}
+
+function questProgressValue(q){
+  const rec = gameState.quests[q.id];
+  return rec ? rec.progress||0 : 0;
+}
+function updateQuestProgressAuto(){
+  // Recalcula misiones cuya condición se puede derivar del estado global (colección, dex)
+  for(const q of QUESTS){
+    const rec = gameState.quests[q.id];
+    if(!rec || rec.status!=='active') continue;
+    if(q.type==='dex_count'){ rec.progress = dexCaughtCount(); }
+    if(q.type==='complete_biome_collection'){
+      const set = gameState.biomeCollectionSeen[q.target] || {};
+      rec.progress = Object.keys(set).length;
+    }
+  }
+}
+
+/* =====================================================================
+   6. RENDERIZADO PROCEDIMENTAL DE CRIATURAS (canvas)
+   ===================================================================== */
+function ell(ctx,x,y,rx,ry,fill,stroke){
+  ctx.beginPath(); ctx.ellipse(x,y,Math.max(0.4,rx),Math.max(0.4,ry),0,0,Math.PI*2);
+  ctx.fillStyle=fill; ctx.fill();
+  if(stroke){ ctx.lineWidth=Math.max(1,rx*0.09); ctx.strokeStyle=stroke; ctx.stroke(); }
+}
+function poly(ctx,pts,fill,stroke){
+  ctx.beginPath(); ctx.moveTo(pts[0][0],pts[0][1]);
+  for(let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0],pts[i][1]);
+  ctx.closePath(); ctx.fillStyle=fill; ctx.fill();
+  if(stroke){ ctx.lineWidth=1; ctx.strokeStyle=stroke; ctx.stroke(); }
+}
+function shadeOf(hex, amt){
+  const n = parseInt(hex.slice(1),16); let r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+  r=clamp(Math.round(r+amt),0,255); g=clamp(Math.round(g+amt),0,255); b=clamp(Math.round(b+amt),0,255);
+  return '#'+[r,g,b].map(v=>v.toString(16).padStart(2,'0')).join('');
+}
+
+function drawTail(ctx,s,color,style,wag){
+  ctx.save(); ctx.rotate(wag*0.18);
+  if(style==='pluma'){
+    poly(ctx,[[0,0],[-s*0.55,-s*0.05],[-s*0.75,-s*0.32],[-s*0.5,-s*0.1],[-s*0.35,0.02*s]], color, shadeOf(color,-30));
+  } else if(style==='aleta'){
+    poly(ctx,[[0,0],[-s*0.5,-s*0.22],[-s*0.5,s*0.22]], color, shadeOf(color,-30));
+  } else if(style==='hojas'){
+    ell(ctx,-s*0.4,0,s*0.22,s*0.12,color,shadeOf(color,-20));
+  } else if(style==='peluda'){
+    ell(ctx,-s*0.42,0,s*0.26,s*0.16,color,shadeOf(color,-20));
+  } else if(style==='corta'){
+    ell(ctx,-s*0.28,0,s*0.14,s*0.09,color,shadeOf(color,-20));
+  } else {
+    poly(ctx,[[0,-s*0.06],[-s*0.62,-s*0.02],[-s*0.7,s*0.05],[-s*0.6,s*0.08],[0,s*0.06]], color, shadeOf(color,-30));
+  }
+  ctx.restore();
+}
+function drawWings(ctx,s,color,style,flap){
+  const spread = 0.7 + flap*0.25;
+  ctx.save();
+  if(style==='membrana'){
+    poly(ctx,[[0,-s*0.05],[-s*0.7*spread,-s*0.5*spread],[-s*0.55*spread,-s*0.05],[-s*0.35,s*0.05]], shadeOf(color,-15), shadeOf(color,-40));
+    poly(ctx,[[0,-s*0.05],[s*0.7*spread,-s*0.5*spread],[s*0.55*spread,-s*0.05],[s*0.35,s*0.05]], shadeOf(color,-15), shadeOf(color,-40));
+  } else if(style==='grandes'){
+    ell(ctx,-s*0.55*spread,-s*0.05,s*0.5,s*0.28,color,shadeOf(color,-30));
+    ell(ctx,s*0.55*spread,-s*0.05,s*0.5,s*0.28,color,shadeOf(color,-30));
+  } else {
+    poly(ctx,[[0,0],[-s*0.62*spread,-s*0.38*spread],[-s*0.4,s*0.02],[-s*0.15,s*0.08]], color, shadeOf(color,-30));
+    poly(ctx,[[0,0],[s*0.62*spread,-s*0.38*spread],[s*0.4,s*0.02],[s*0.15,s*0.08]], color, shadeOf(color,-30));
+  }
+  ctx.restore();
+}
+function drawSpikes(ctx,cx,cy,s,color,count,spread){
+  for(let i=0;i<count;i++){
+    const t = (i/(count-1||1) - 0.5) * spread;
+    const bx = cx + t*s, by = cy - s*0.28;
+    poly(ctx,[[bx-s*0.05,by],[bx+s*0.05,by],[bx,by-s*0.22]], color, shadeOf(color,-30));
+  }
+}
+function drawOrbit(ctx,s,color,count,phase){
+  for(let i=0;i<count;i++){
+    const a = phase*Math.PI*2 + i*(Math.PI*2/count);
+    const ox = Math.cos(a)*s*0.62, oy = Math.sin(a)*s*0.28;
+    ell(ctx, ox, oy, s*0.06, s*0.06, color, null);
+  }
+}
+function drawGlowRing(ctx,s,color){
+  const g = ctx.createRadialGradient(0,0,s*0.1,0,0,s*0.75);
+  g.addColorStop(0, color+'55'); g.addColorStop(1, color+'00');
+  ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0,0,s*0.75,0,Math.PI*2); ctx.fill();
+}
+
+function drawBodyByShape(ctx, body, s, primary, secondary, opts){
+  const dark = shadeOf(primary,-35), darker = shadeOf(primary,-55);
+  switch(body){
+    case 'reptil':
+      ell(ctx,0,s*0.05,s*0.42,s*0.32,primary,dark);
+      ell(ctx,s*0.35,-s*0.12,s*0.2,s*0.17,secondary,dark);
+      for(const lx of [-0.22,0.22]) ell(ctx,lx*s,s*0.3,s*0.09,s*0.12,dark,null);
+      break;
+    case 'serpiente':
+      ctx.save();
+      ctx.beginPath();
+      ctx.moveTo(-s*0.55,0.05*s);
+      ctx.bezierCurveTo(-s*0.2,-s*0.3, s*0.2,s*0.3, s*0.5,-s*0.05);
+      ctx.lineWidth = s*0.3; ctx.strokeStyle = primary; ctx.lineCap='round'; ctx.stroke();
+      ctx.lineWidth = s*0.3; ctx.strokeStyle = 'transparent';
+      ell(ctx,s*0.52,-s*0.08,s*0.16,s*0.14,secondary,dark);
+      ctx.restore();
+      break;
+    case 'ave':
+      ell(ctx,0,s*0.05,s*0.32,s*0.38,primary,dark);
+      ell(ctx,0,-s*0.32,s*0.2,s*0.2,secondary,dark);
+      poly(ctx,[[s*0.16,-s*0.32],[s*0.42,-s*0.28],[s*0.16,-s*0.22]],'#f2b33d',dark);
+      break;
+    case 'artropodo':
+      for(let i=0;i<3;i++) ell(ctx,-s*0.2+i*s*0.2,s*0.02,s*0.18,s*0.24,i%2? secondary:primary,dark);
+      for(const side of [-1,1]) for(let i=0;i<3;i++){
+        ctx.save(); ctx.strokeStyle=dark; ctx.lineWidth=s*0.03;
+        ctx.beginPath(); ctx.moveTo(side*s*0.15+i*side*0.02*s, s*0.15); ctx.lineTo(side*(s*0.42), s*0.4-i*0.08*s); ctx.stroke();
+        ctx.restore();
+      }
+      break;
+    case 'fantasma':
+      ctx.beginPath();
+      ctx.moveTo(-s*0.4,s*0.35);
+      ctx.quadraticCurveTo(-s*0.5,-s*0.2, 0,-s*0.45);
+      ctx.quadraticCurveTo(s*0.5,-s*0.2, s*0.4,s*0.35);
+      for(let i=0;i<4;i++){
+        const bx = s*0.4 - i*(s*0.8/3);
+        ctx.quadraticCurveTo(bx-s*0.1, s*0.45, bx-s*0.2, s*0.32);
+      }
+      ctx.closePath(); ctx.fillStyle=primary; ctx.fill(); ctx.strokeStyle=dark; ctx.lineWidth=s*0.04; ctx.stroke();
+      break;
+    case 'acuatico':
+      ell(ctx,0,0,s*0.46,s*0.26,primary,dark);
+      ell(ctx,s*0.05,0,s*0.3,s*0.14,secondary,null);
+      break;
+    case 'caparazon':
+      ell(ctx,0,s*0.08,s*0.44,s*0.3,dark,darker);
+      ell(ctx,0,-s*0.02,s*0.36,s*0.22,secondary,dark);
+      ell(ctx,0,s*0.32,s*0.18,s*0.1,primary,dark);
+      break;
+    case 'insecto':
+      ell(ctx,0,s*0.06,s*0.22,s*0.3,primary,dark);
+      ell(ctx,0,-s*0.24,s*0.14,s*0.14,secondary,dark);
+      break;
+    case 'volador':
+      ell(ctx,0,s*0.05,s*0.2,s*0.24,primary,dark);
+      ell(ctx,0,-s*0.2,s*0.15,s*0.15,secondary,dark);
+      break;
+    case 'cuadrupedo':
+      ell(ctx,0,s*0.06,s*0.4,s*0.24,primary,dark);
+      ell(ctx,s*0.36,-s*0.08,s*0.18,s*0.17,secondary,dark);
+      for(const lx of [-0.26,-0.05,0.16,0.34]) ell(ctx,lx*s,s*0.28,s*0.07,s*0.13,dark,null);
+      break;
+    case 'humanoide':
+      ell(ctx,0,s*0.1,s*0.28,s*0.34,primary,dark);
+      ell(ctx,0,-s*0.28,s*0.19,s*0.19,secondary,dark);
+      for(const lx of [-0.32,0.32]) ell(ctx,lx*s,s*0.05,s*0.1,s*0.22,dark,null);
+      for(const lx of [-0.14,0.14]) ell(ctx,lx*s,s*0.42,s*0.1,s*0.15,dark,null);
+      break;
+    case 'esferico':
+      ell(ctx,0,0,s*0.42,s*0.42,primary,dark);
+      ell(ctx,-s*0.12,-s*0.12,s*0.14,s*0.1,secondary,null);
+      break;
+    case 'etereo':
+      drawGlowRing(ctx,s,primary);
+      ell(ctx,0,0,s*0.34,s*0.34,secondary+'cc',null);
+      break;
+    case 'geometrico':
+      poly(ctx,[[0,-s*0.42],[s*0.38,0],[0,s*0.42],[-s*0.38,0]], primary, dark);
+      poly(ctx,[[0,-s*0.42],[s*0.38,0],[0,0]], secondary, null);
+      break;
+    case 'planta':
+      ctx.strokeStyle = dark; ctx.lineWidth = s*0.08;
+      ctx.beginPath(); ctx.moveTo(0,s*0.4); ctx.lineTo(0,-s*0.1); ctx.stroke();
+      ell(ctx,-s*0.22,s*0.05,s*0.2,s*0.12,primary,dark);
+      ell(ctx,s*0.22,s*0.15,s*0.2,s*0.12,primary,dark);
+      ell(ctx,0,-s*0.28,s*0.2,s*0.2,secondary,dark);
+      break;
+    default:
+      ell(ctx,0,0,s*0.36,s*0.36,primary,dark);
+  }
+}
+
+const APPENDAGE_BACK = new Set(['alas','alas_membrana','alas_grandes','halo','estelas','orbitas','aura']);
+function drawAppendage(ctx, app, s, primary, secondary, phaseT){
+  switch(app){
+    case 'alas': drawWings(ctx,s,secondary,'normal',Math.abs(Math.sin(phaseT*Math.PI*2))); break;
+    case 'alas_membrana': drawWings(ctx,s,shadeOf(primary,-20),'membrana',Math.abs(Math.sin(phaseT*Math.PI*2))); break;
+    case 'alas_grandes': drawWings(ctx,s,secondary,'grandes',Math.abs(Math.sin(phaseT*Math.PI*2))); break;
+    case 'cuernos': drawSpikes(ctx,0,-s*0.32,s,secondary,2,0.5); break;
+    case 'picos_cristal': drawSpikes(ctx,0,-s*0.3,s,secondary,3,0.7); break;
+    case 'picos_roca': drawSpikes(ctx,0,-s*0.3,s,shadeOf(primary,-40),3,0.8); break;
+    case 'cola_larga': drawTail(ctx,s,primary,'normal',Math.sin(phaseT*Math.PI*2)); break;
+    case 'cola_pluma': drawTail(ctx,s,secondary,'pluma',Math.sin(phaseT*Math.PI*2)); break;
+    case 'cola_aleta': drawTail(ctx,s,secondary,'aleta',Math.sin(phaseT*Math.PI*2)); break;
+    case 'cola_hojas': drawTail(ctx,s,secondary,'hojas',Math.sin(phaseT*Math.PI*2)); break;
+    case 'cola_peluda': drawTail(ctx,s,secondary,'peluda',Math.sin(phaseT*Math.PI*2)); break;
+    case 'cola_corta': drawTail(ctx,s,primary,'corta',Math.sin(phaseT*Math.PI*2)); break;
+    case 'pinzas':
+      ell(ctx,-s*0.46,-s*0.02,s*0.14,s*0.1,secondary,shadeOf(secondary,-30));
+      ell(ctx,s*0.46,-s*0.02,s*0.14,s*0.1,secondary,shadeOf(secondary,-30));
+      break;
+    case 'aguijon': drawTail(ctx,s,shadeOf(primary,-20),'normal',Math.sin(phaseT*Math.PI*2)); break;
+    case 'aletas':
+      poly(ctx,[[0,-s*0.1],[-s*0.28,-s*0.4],[-s*0.08,-s*0.08]], secondary, null);
+      poly(ctx,[[0,-s*0.1],[s*0.28,-s*0.4],[s*0.08,-s*0.08]], secondary, null);
+      break;
+    case 'caparazon_pico': ell(ctx,0,-s*0.34,s*0.08,s*0.1,secondary,null); break;
+    case 'antenas':
+      for(const side of [-1,1]){ ctx.strokeStyle=secondary; ctx.lineWidth=s*0.03;
+        ctx.beginPath(); ctx.moveTo(side*s*0.08,-s*0.36); ctx.lineTo(side*s*0.2,-s*0.55); ctx.stroke();
+        ell(ctx,side*s*0.2,-s*0.55,s*0.04,s*0.04,secondary,null); }
+      break;
+    case 'orejas':
+      poly(ctx,[[-s*0.12,-s*0.36],[-s*0.22,-s*0.6],[-s*0.02,-s*0.4]],primary,null);
+      poly(ctx,[[s*0.12,-s*0.36],[s*0.22,-s*0.6],[s*0.02,-s*0.4]],primary,null);
+      break;
+    case 'nucleo': ell(ctx,0,s*0.04,s*0.12,s*0.12, '#fff7cf', secondary); break;
+    case 'brazos_grandes':
+      ell(ctx,-s*0.42,s*0.05,s*0.14,s*0.28,shadeOf(primary,-15),null);
+      ell(ctx,s*0.42,s*0.05,s*0.14,s*0.28,shadeOf(primary,-15),null);
+      break;
+    case 'chispa':
+      poly(ctx,[[s*0.1,-s*0.5],[-s*0.05,-s*0.3],[s*0.06,-s*0.3],[-s*0.1,-s*0.05]], '#fff27a', null);
+      break;
+    case 'orbitas': drawOrbit(ctx,s,secondary,3,phaseT); break;
+    case 'estelas': drawOrbit(ctx,s,'#ffffffaa',4,phaseT*1.4); break;
+    case 'halo': ell(ctx,0,-s*0.55,s*0.24,s*0.07,'#fff6c9',null); break;
+    case 'aura': drawGlowRing(ctx,s,secondary); break;
+    case 'hojas': ell(ctx,-s*0.3,-s*0.15,s*0.16,s*0.1,secondary,null); ell(ctx,s*0.3,-s*0.15,s*0.16,s*0.1,secondary,null); break;
+    case 'flores': ell(ctx,0,-s*0.5,s*0.1,s*0.1,'#ff8fc7',null); break;
+    case 'raices': for(const side of [-1,1]){ ctx.strokeStyle=shadeOf(primary,-40); ctx.lineWidth=s*0.03;
+        ctx.beginPath(); ctx.moveTo(side*s*0.1,s*0.4); ctx.lineTo(side*s*0.25,s*0.5); ctx.stroke(); } break;
+    case 'cadenas': for(const side of [-1,1]){ ctx.strokeStyle='#8a8a8a'; ctx.lineWidth=s*0.025;
+        ctx.beginPath(); ctx.moveTo(side*s*0.2,s*0.2); ctx.lineTo(side*s*0.28,s*0.5); ctx.stroke(); } break;
+    default: break;
+  }
+}
+
+function drawPattern(ctx, g, s, opts){
+  ctx.save(); ctx.globalAlpha = 0.5;
+  const c = shadeOf(g.secondary, opts.flash?0:-10);
+  if(g.pattern==='manchas'){
+    for(let i=0;i<5;i++){ const rng=mulberry32(i*77+1); ell(ctx,(rng()-0.5)*s*0.6,(rng()-0.5)*s*0.5,s*0.06,s*0.06,c,null); }
+  } else if(g.pattern==='rayas'){
+    for(let i=-2;i<=2;i++){ ctx.strokeStyle=c; ctx.lineWidth=s*0.035; ctx.beginPath(); ctx.moveTo(i*s*0.12,-s*0.3); ctx.lineTo(i*s*0.12+s*0.08,s*0.3); ctx.stroke(); }
+  } else if(g.pattern==='escamas'){
+    for(let i=-1;i<=1;i++) for(let j=-1;j<=1;j++) ell(ctx,i*s*0.18,j*s*0.14,s*0.07,s*0.05,c,null);
+  } else if(g.pattern==='destellos'){
+    for(let i=0;i<4;i++){ const rng=mulberry32(i*33+5); ell(ctx,(rng()-0.5)*s*0.7,(rng()-0.5)*s*0.6,s*0.03,s*0.03,'#ffffff',null); }
+  }
+  ctx.restore();
+}
+function drawEyesFn(ctx, g, s, opts){
+  const ex = s*0.13, ey = -s*0.06;
+  ctx.fillStyle = '#141414';
+  if(g.eyeType==='multiple'){
+    for(const dx of [-1,0,1]) ell(ctx, dx*ex*0.9, ey, s*0.035, s*0.035, '#141414', null);
+  } else if(g.eyeType==='rasgado'){
+    ctx.strokeStyle='#141414'; ctx.lineWidth=s*0.03;
+    for(const side of [-1,1]){ ctx.beginPath(); ctx.moveTo(side*ex-side*s*0.04, ey); ctx.lineTo(side*ex+side*s*0.04, ey); ctx.stroke(); }
+  } else if(g.eyeType==='brillante'){
+    for(const side of [-1,1]){ ell(ctx, side*ex, ey, s*0.05, s*0.05, '#fff8d6', '#141414'); ell(ctx, side*ex, ey, s*0.02,s*0.02,'#141414',null); }
+  } else {
+    for(const side of [-1,1]) ell(ctx, side*ex, ey, s*0.045, s*0.045, '#141414', null);
+  }
+}
+
+function drawCreatureArt(ctx, species, x, y, size, opts){
+  opts = Object.assign({facing:'down', animT:0, silhouette:false, flash:false}, opts||{});
+  const g = species.genome;
+  ctx.save();
+  ctx.translate(x,y);
+  const s = size * (g.sizeScale||1);
+  const bob = Math.sin(opts.animT*Math.PI*2) * s*0.035;
+  ctx.translate(0, bob);
+  if(opts.facing==='left') ctx.scale(-1,1);
+
+  const primary = opts.silhouette ? '#0a0a12' : (opts.flash ? '#ffffff' : g.primary);
+  const secondary = opts.silhouette ? '#0a0a12' : (opts.flash ? '#ffffff' : g.secondary);
+
+  if(!opts.silhouette && g.aura) drawGlowRing(ctx, s*1.15, primary);
+  for(const app of g.appendages) if(APPENDAGE_BACK.has(app)) drawAppendage(ctx, app, s, primary, secondary, opts.animT);
+  drawBodyByShape(ctx, g.body, s, primary, secondary, opts);
+  for(const app of g.appendages) if(!APPENDAGE_BACK.has(app)) drawAppendage(ctx, app, s, primary, secondary, opts.animT);
+  if(!opts.silhouette){ drawPattern(ctx, g, s, opts); drawEyesFn(ctx, g, s, opts); }
+  ctx.restore();
+}
+function renderSpeciesToCanvas(canvas, speciesId, opts){
+  const species = SPECIES_BY_ID[speciesId];
+  const ctx = canvas.getContext('2d');
+  const w = canvas.width, h = canvas.height;
+  ctx.clearRect(0,0,w,h);
+  drawCreatureArt(ctx, species, w/2, h*0.58, Math.min(w,h)*0.72, opts);
+}
+
+/* =====================================================================
+   7. JUGADOR, MUNDO EN TIEMPO REAL, CÁMARA, CLIMA, CICLO DÍA/NOCHE
+   ===================================================================== */
+const WEATHER_TYPES = ['despejado','lluvia','tormenta','niebla','nieve'];
+const WEATHER_LABEL = {despejado:'☀️ Despejado', lluvia:'🌧️ Lluvia', tormenta:'⛈️ Tormenta', niebla:'🌫️ Niebla', nieve:'❄️ Nieve'};
+const WEATHER_BY_BIOME_BIAS = {
+  montana_helada:{nieve:3}, volcan_carmesi:{despejado:2}, pantano_oscuro:{niebla:3}, oceano_profundo:{tormenta:1.5,lluvia:1.5},
+  cielo_celestial:{tormenta:1.2}, islas_flotantes:{tormenta:1.2}, costa_cristalina:{lluvia:1.3}, jungla_perdida:{lluvia:2},
+  bosque_verde:{lluvia:1.2}
+};
+function weatherMatches(pref, weather, isNight, moonFull){
+  if(!pref) return true;
+  if(pref==='luna_llena') return isNight && moonFull;
+  return pref===weather;
+}
+function isMoonFull(day){ return day%5===0; }
+function isNightHour(hour){ return hour<5.5 || hour>=19.5; }
+
+let worldCanvas, wctx, minimapCanvas, mctx;
+let camera = {x:0,y:0};
+const keysDown = {};
+const touchDir = {up:false,down:false,left:false,right:false};
+let player = {x:0,y:0,facing:'down',moving:false,animPhase:0,speed:150};
+let inputLocked = false;
+let lastFrameTime = 0;
+let hudUpdateAcc = 0;
+const worldRuntimeCache = {};
+let currentRuntime = null;
+let nearbyInteractable = null; // {type:'npc'|'portal'|'wild'|'boss', ref}
+const weatherParticles = [];
+
+function collectTilesOfType(map, tileType){
+  const key = '__cache_'+tileType;
+  if(map[key]) return map[key];
+  const list = [];
+  for(let y=0;y<map.height;y++) for(let x=0;x<map.width;x++) if(map.tiles[y][x]===tileType) list.push({x,y});
+  map[key] = list;
+  return list;
+}
+function isWalkableTile(map, tx, ty){
+  if(tx<0||ty<0||tx>=map.width||ty>=map.height) return false;
+  const t = map.tiles[ty][tx];
+  if(t==='lava' || t==='vacio' || t==='vacio_oscuro') return false;
+  if(map.obstacles.has(tx+','+ty)) return false;
+  return true;
+}
+
+function levelForBiome(order){ return clamp(order*6 + rngInt(Math.random, 1,6), 1, 95); }
+
+function spawnWildEntity(map, biomeDef, biome){
+  const isNight = isNightHour(gameState.clock.hour);
+  const moonFull = isMoonFull(gameState.clock.day);
+  const pool = speciesByBiome(biome.id).filter(s=>!s.isBoss &&
+    (s.timeOfDay==='ambos' || (s.timeOfDay==='diurno'&&!isNight) || (s.timeOfDay==='nocturno'&&isNight)) &&
+    weatherMatches(s.weatherPref, gameState.weather.current, isNight, moonFull));
+  const finalPool = pool.length ? pool : speciesByBiome(biome.id).filter(s=>!s.isBoss);
+  if(!finalPool.length) return null;
+  const weighted = finalPool.map(s=>({item:s, w: RARITY_BY_ID[s.rarity].weight}));
+  const species = choiceWeighted(Math.random, weighted);
+  let tile;
+  if(species.habitat==='acuatico'){
+    const wt = collectTilesOfType(map, BIOME_MAP_PARAMS[biome.id].water);
+    tile = wt.length ? rngPick(Math.random, wt) : {x:rngInt(Math.random,3,map.width-4), y:rngInt(Math.random,3,map.height-4)};
+  } else if(species.habitat==='aereo'){
+    tile = {x:rngInt(Math.random,3,map.width-4), y:rngInt(Math.random,3,map.height-4)};
+  } else {
+    let tries=0, cand=null;
+    while(tries<30){
+      const cx = rngInt(Math.random,3,map.width-4), cy = rngInt(Math.random,3,map.height-4);
+      if(isWalkableTile(map,cx,cy)){ cand={x:cx,y:cy}; break; }
+      tries++;
+    }
+    tile = cand || {x:map.village.x, y:map.village.y};
+  }
+  return {
+    uid: uid('wild'), speciesId: species.id, level: levelForBiome(biome.order),
+    x: tile.x*TILE+TILE/2, y: tile.y*TILE+TILE/2, homeX:tile.x*TILE+TILE/2, homeY:tile.y*TILE+TILE/2,
+    habitat: species.habitat, vx:0, vy:0, state:'idle', stateTimer: rngRange(Math.random,1,3),
+    facing:'down', animPhase: Math.random(), roamRadius: species.habitat==='aereo'?160:90
+  };
+}
+
+function getWorldRuntime(biomeId){
+  if(worldRuntimeCache[biomeId]) return worldRuntimeCache[biomeId];
+  const biome = BIOME_BY_ID[biomeId];
+  const def = WORLD_DEFS[biomeId];
+  const map = generateWorldMap(biomeId);
+  const npcEntities = def.npcs.map(n=>({
+    id:n.id, name:n.name, role:n.role, lines:n.lines, shop:n.shop, quest:n.quest,
+    x:(map.village.x+n.x)*TILE+TILE/2, y:(map.village.y+n.y)*TILE+TILE/2, animPhase:Math.random()
+  }));
+  const wildEntities = [];
+  for(let i=0;i<16;i++){ const w = spawnWildEntity(map, def, biome); if(w) wildEntities.push(w); }
+  const rt = {biome, def, map, npcEntities, wildEntities, bossAlive: !gameState.bossesDefeated.includes(biomeId), respawnTimer:6};
+  worldRuntimeCache[biomeId] = rt;
+  return rt;
+}
+
+/* ---------------------------------------------------------------------
+   Bucle principal, cámara, actualización
+   --------------------------------------------------------------------- */
+function resizeCanvases(){
+  if(!worldCanvas) return;
+  worldCanvas.width = window.innerWidth; worldCanvas.height = window.innerHeight;
+}
+function updateClock(dt){
+  const c = gameState.clock;
+  c.minute += dt * 4; // 1s real = 4 min de juego
+  while(c.minute>=60){ c.minute-=60; c.hour++; if(c.hour>=24){ c.hour=0; c.day++; } }
+}
+function updateWeather(dt){
+  const w = gameState.weather;
+  w.timer -= dt;
+  if(w.timer<=0){
+    const bias = WEATHER_BY_BIOME_BIAS[gameState.currentWorld] || {};
+    const weighted = WEATHER_TYPES.map(t=>({item:t, w:(t==='despejado'?4:1)*(bias[t]||1)}));
+    w.current = choiceWeighted(Math.random, weighted);
+    w.timer = rngRange(Math.random, 90, 220);
+    rebuildWeatherParticles();
+  }
+}
+function rebuildWeatherParticles(){
+  weatherParticles.length = 0;
+  const w = gameState.weather.current;
+  const count = w==='tormenta'?140:w==='lluvia'?100:w==='nieve'?70:w==='niebla'?18:0;
+  for(let i=0;i<count;i++){
+    weatherParticles.push({
+      x:Math.random()*window.innerWidth, y:Math.random()*window.innerHeight,
+      speed: w==='nieve'? rngRange(Math.random,20,50) : rngRange(Math.random,260,420),
+      drift: rngRange(Math.random,-20,20), size: w==='niebla'? rngRange(Math.random,60,140): rngRange(Math.random,1.5,3)
+    });
+  }
+}
+function updatePlayerMovement(dt){
+  let dx=0, dy=0;
+  if(keysDown['ArrowUp']||keysDown['KeyW']||touchDir.up) dy-=1;
+  if(keysDown['ArrowDown']||keysDown['KeyS']||touchDir.down) dy+=1;
+  if(keysDown['ArrowLeft']||keysDown['KeyA']||touchDir.left) dx-=1;
+  if(keysDown['ArrowRight']||keysDown['KeyD']||touchDir.right) dx+=1;
+  player.moving = (dx!==0||dy!==0);
+  if(player.moving){
+    const len = Math.hypot(dx,dy); dx/=len; dy/=len;
+    if(Math.abs(dx)>Math.abs(dy)) player.facing = dx>0?'right':'left';
+    else player.facing = dy>0?'down':'up';
+    const map = currentRuntime.map;
+    const nx = player.x + dx*player.speed*dt, ny = player.y + dy*player.speed*dt;
+    const tx = Math.floor(nx/TILE), ty = Math.floor(player.y/TILE);
+    const ty2 = Math.floor(ny/TILE), tx2 = Math.floor(player.x/TILE);
+    if(isWalkableTile(map, tx, ty)) player.x = clamp(nx, TILE, map.width*TILE-TILE);
+    if(isWalkableTile(map, tx2, ty2)) player.y = clamp(ny, TILE, map.height*TILE-TILE);
+    player.animPhase += dt*4;
+  }
+  gameState.playerPos.x = player.x/TILE; gameState.playerPos.y = player.y/TILE; gameState.playerFacing = player.facing;
+}
+function updateWildEntities(dt){
+  const rt = currentRuntime;
+  for(const w of rt.wildEntities){
+    w.animPhase += dt*1.5;
+    w.stateTimer -= dt;
+    if(w.stateTimer<=0){
+      w.state = Math.random()<0.55 ? 'wander' : 'idle';
+      w.stateTimer = rngRange(Math.random,1.5,4);
+      if(w.state==='wander'){
+        const ang = Math.random()*Math.PI*2;
+        w.vx = Math.cos(ang)*30; w.vy = Math.sin(ang)*30*(w.habitat==='aereo'?0.6:1);
+      } else { w.vx=0; w.vy=0; }
+    }
+    if(w.state==='wander'){
+      const nx = w.x+w.vx*dt, ny = w.y+w.vy*dt;
+      if(Math.hypot(nx-w.homeX, ny-w.homeY) < w.roamRadius){
+        if(w.habitat==='aereo' || w.habitat==='acuatico'){ w.x=nx; w.y=ny; }
+        else { const tx=Math.floor(nx/TILE), ty=Math.floor(ny/TILE); if(isWalkableTile(rt.map,tx,ty)){ w.x=nx; w.y=ny; } else { w.vx*=-1; w.vy*=-1; } }
+        w.facing = Math.abs(w.vx)>Math.abs(w.vy) ? (w.vx>0?'right':'left') : (w.vy>0?'down':'up');
+      } else { w.vx*=-1; w.vy*=-1; }
+    }
+  }
+  rt.respawnTimer -= dt;
+  if(rt.respawnTimer<=0 && rt.wildEntities.length<18){
+    rt.respawnTimer = rngRange(Math.random,4,9);
+    const w = spawnWildEntity(rt.map, rt.def, rt.biome);
+    if(w) rt.wildEntities.push(w);
+  }
+}
+function updateCamera(){
+  const map = currentRuntime.map;
+  const vw = worldCanvas.width, vh = worldCanvas.height;
+  camera.x = clamp(player.x - vw/2, 0, Math.max(0, map.width*TILE - vw));
+  camera.y = clamp(player.y - vh/2, 0, Math.max(0, map.height*TILE - vh));
+}
+function checkProximity(){
+  nearbyInteractable = null;
+  const rt = currentRuntime;
+  let best = 46;
+  for(const n of rt.npcEntities){
+    const d = Math.hypot(n.x-player.x, n.y-player.y);
+    if(d<best){ best=d; nearbyInteractable = {type:'npc', ref:n}; }
+  }
+  const pd = Math.hypot((rt.map.portalSpot.x*TILE+TILE/2)-player.x, (rt.map.portalSpot.y*TILE+TILE/2)-player.y);
+  if(pd<best){ best=pd; nearbyInteractable = {type:'portal', ref:rt.map.portalSpot}; }
+  if(rt.bossAlive){
+    const bd = Math.hypot((rt.map.bossSpot.x*TILE+TILE/2)-player.x, (rt.map.bossSpot.y*TILE+TILE/2)-player.y);
+    if(bd<54){ nearbyInteractable = {type:'boss', ref:rt.def}; best=bd; }
+  }
+  if(!nearbyInteractable){
+    for(const w of rt.wildEntities){
+      const d = Math.hypot(w.x-player.x, w.y-player.y);
+      if(d<44){ nearbyInteractable = {type:'wild', ref:w}; break; }
+    }
+  }
+  if(rt.map.ruinSpot && !gameState.ruinsDiscovered.includes(rt.biome.id)){
+    const rd = Math.hypot((rt.map.ruinSpot.x*TILE+TILE/2)-player.x, (rt.map.ruinSpot.y*TILE+TILE/2)-player.y);
+    if(rd<50){
+      gameState.ruinsDiscovered.push(rt.biome.id);
+      showToast('🏛️ Has descubierto unas ruinas ocultas en '+rt.biome.name+'.');
+      onQuestEvent('discover_ruin', rt.biome.id);
+    }
+  }
+  const prompt = document.getElementById('interactPrompt');
+  if(nearbyInteractable){
+    let txt = 'Pulsa <b>E</b> para interactuar';
+    if(nearbyInteractable.type==='npc') txt = 'Pulsa <b>E</b> para hablar con '+nearbyInteractable.ref.name;
+    else if(nearbyInteractable.type==='portal') txt = 'Pulsa <b>E</b> para usar el portal';
+    else if(nearbyInteractable.type==='boss') txt = 'Pulsa <b>E</b> para desafiar al guardián';
+    else if(nearbyInteractable.type==='wild') txt = 'Pulsa <b>E</b> para enfrentarte a la criatura';
+    prompt.innerHTML = txt; prompt.classList.add('show');
+  } else prompt.classList.remove('show');
+}
+
+/* ---------------------------------------------------------------------
+   Renderizado
+   --------------------------------------------------------------------- */
+function drawPersonSprite(ctx,x,y,bodyColor,accentColor,animPhase,moving){
+  ctx.save(); ctx.translate(x,y);
+  const bob = moving ? Math.sin(animPhase*Math.PI*2)*2.4 : 0;
+  ctx.fillStyle='rgba(0,0,0,0.28)'; ctx.beginPath(); ctx.ellipse(0,15,10,4,0,0,Math.PI*2); ctx.fill();
+  ctx.translate(0,bob);
+  ctx.fillStyle=shadeOf(bodyColor,-40);
+  ctx.fillRect(-6,3,5,11); ctx.fillRect(1,3,5,11);
+  ctx.fillStyle=bodyColor;
+  ctx.beginPath(); ctx.ellipse(0,-6,9,12,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#f2c79c';
+  ctx.beginPath(); ctx.arc(0,-20,7,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=accentColor;
+  ctx.beginPath(); ctx.arc(0,-23,7.3,Math.PI,0); ctx.fill();
+  ctx.restore();
+}
+function renderTiles(){
+  const map = currentRuntime.map;
+  const x0 = Math.max(0, Math.floor(camera.x/TILE)-1), y0 = Math.max(0, Math.floor(camera.y/TILE)-1);
+  const x1 = Math.min(map.width-1, Math.ceil((camera.x+worldCanvas.width)/TILE)+1);
+  const y1 = Math.min(map.height-1, Math.ceil((camera.y+worldCanvas.height)/TILE)+1);
+  for(let ty=y0; ty<=y1; ty++){
+    for(let tx=x0; tx<=x1; tx++){
+      const t = map.tiles[ty][tx];
+      let colors;
+      if(t==='camino') colors=['#7a6a4a','#6f5f42'];
+      else if(t==='piso_aldea') colors=['#9a8a6a','#8d7f5f'];
+      else if(t==='portal') colors=['#6a3fbd','#5c34a8'];
+      else colors = tileBaseColors(t);
+      wctx.fillStyle = ((tx+ty)%2===0) ? colors[0] : colors[1];
+      wctx.fillRect(tx*TILE-camera.x, ty*TILE-camera.y, TILE, TILE);
+      if(t==='portal'){
+        wctx.save();
+        const cx=tx*TILE-camera.x+TILE/2, cy=ty*TILE-camera.y+TILE/2;
+        const g = wctx.createRadialGradient(cx,cy,2,cx,cy,TILE*0.9);
+        g.addColorStop(0,'#c9a6ff'); g.addColorStop(1,'#6a3fbd00');
+        wctx.fillStyle=g; wctx.beginPath(); wctx.arc(cx,cy,TILE*0.9,0,Math.PI*2); wctx.fill();
+        wctx.restore();
+      }
+    }
+  }
+}
+function renderDecorItem(d){
+  const style = DECOR_STYLE[d.type]; if(!style) return;
+  const x = d.x*TILE-camera.x+TILE/2, y = d.y*TILE-camera.y+TILE/2;
+  wctx.save(); wctx.translate(x,y);
+  const s = TILE*1.15;
+  switch(style.shape){
+    case 'tree':
+      wctx.fillStyle=style.trunk; wctx.fillRect(-3,0,6,s*0.35);
+      ell(wctx,0,-s*0.22,s*0.32,s*0.28,style.leaf,shadeOf(style.leaf,-25));
+      break;
+    case 'deadtree':
+      wctx.strokeStyle=style.trunk; wctx.lineWidth=4;
+      wctx.beginPath(); wctx.moveTo(0,s*0.3); wctx.lineTo(0,-s*0.2); wctx.lineTo(-s*0.18,-s*0.4); wctx.moveTo(0,-s*0.05); wctx.lineTo(s*0.16,-s*0.3); wctx.stroke();
+      break;
+    case 'palm':
+      wctx.fillStyle=style.trunk; wctx.fillRect(-2,0,4,s*0.4);
+      for(let i=0;i<5;i++){ wctx.save(); wctx.rotate(i*1.2); ell(wctx,s*0.16,-s*0.32,s*0.2,s*0.08,style.leaf,null); wctx.restore(); }
+      break;
+    case 'pine':
+      wctx.fillStyle=style.trunk; wctx.fillRect(-2,s*0.1,4,s*0.2);
+      poly(wctx,[[0,-s*0.5],[-s*0.22,-s*0.05],[s*0.22,-s*0.05]],style.leaf,null);
+      poly(wctx,[[0,-s*0.32],[-s*0.16,s*0.05],[s*0.16,s*0.05]],style.leaf,null);
+      break;
+    case 'cactus':
+      wctx.fillStyle=style.leaf; wctx.fillRect(-4,-s*0.35,8,s*0.5); wctx.fillRect(-12,-s*0.15,8,s*0.22); wctx.fillRect(4,-s*0.25,8,s*0.22);
+      break;
+    case 'flower': ell(wctx,0,0,4,4,style.trunk||'#3a7a3a',null); ell(wctx,0,-6,5,5,style.leaf,null); break;
+    case 'grasspatch':
+      wctx.strokeStyle=style.leaf; wctx.lineWidth=2;
+      for(let i=-2;i<=2;i++){ wctx.beginPath(); wctx.moveTo(i*4,4); wctx.lineTo(i*4+2,-6); wctx.stroke(); }
+      break;
+    case 'rock': ell(wctx,0,0,s*0.22,s*0.16,style.leaf,shadeOf(style.leaf,-30)); break;
+    case 'floatrock': ell(wctx,0,-6,s*0.24,s*0.14,style.leaf,shadeOf(style.leaf,-30)); break;
+    case 'pillar': wctx.fillStyle=style.leaf; wctx.fillRect(-6,-s*0.4,12,s*0.5); break;
+    case 'statue': ell(wctx,0,-s*0.2,7,14,style.leaf,shadeOf(style.leaf,-30)); ell(wctx,0,-s*0.35,6,6,style.leaf,null); break;
+    case 'spike': poly(wctx,[[-6,6],[6,6],[0,-s*0.4]],style.leaf,null); break;
+    case 'coral': ell(wctx,0,0,s*0.18,s*0.22,style.leaf,shadeOf(style.leaf,-20)); break;
+    case 'mushroom': wctx.fillStyle=style.trunk; wctx.fillRect(-2,-2,4,10); ell(wctx,0,-6,8,5,style.leaf,null); break;
+    case 'shell': ell(wctx,0,0,6,5,style.leaf,null); break;
+    case 'crystal': poly(wctx,[[0,-s*0.3],[6,0],[0,s*0.12],[-6,0]],style.leaf,shadeOf(style.leaf,-30)); break;
+    case 'vine': wctx.strokeStyle=style.leaf; wctx.lineWidth=3; wctx.beginPath(); wctx.moveTo(-6,6); wctx.quadraticCurveTo(0,-8,6,6); wctx.stroke(); break;
+    case 'dune': ell(wctx,0,4,s*0.3,s*0.1,style.leaf,null); break;
+    case 'bone': wctx.strokeStyle=style.leaf; wctx.lineWidth=3; wctx.beginPath(); wctx.moveTo(-8,0); wctx.lineTo(8,0); wctx.stroke(); break;
+    case 'fog': ell(wctx,0,0,s*0.36,s*0.16,style.leaf+'55',null); break;
+    case 'crack': wctx.strokeStyle=style.leaf; wctx.lineWidth=3; wctx.beginPath(); wctx.moveTo(-8,6); wctx.lineTo(0,-4); wctx.lineTo(8,6); wctx.stroke(); break;
+    case 'cloud': ell(wctx,0,0,s*0.3,s*0.14,style.leaf+'aa',null); break;
+    case 'star': for(let i=0;i<4;i++){ wctx.save(); wctx.rotate(i*Math.PI/4); wctx.fillStyle=style.leaf; wctx.fillRect(-1,-6,2,12); wctx.restore(); } break;
+    case 'rune': ell(wctx,0,0,7,7,'transparent',style.leaf); break;
+    case 'eye': ell(wctx,0,0,6,4,'#1a1a1a',style.leaf); break;
+    default: ell(wctx,0,0,6,6,style.leaf,null);
+  }
+  wctx.restore();
+}
+function render(){
+  wctx.fillStyle = '#05060a';
+  wctx.fillRect(0,0,worldCanvas.width,worldCanvas.height);
+  renderTiles();
+  const rt = currentRuntime;
+  const drawables = [];
+  for(const d of rt.map.decor) drawables.push({y:d.y*TILE, draw:()=>renderDecorItem(d)});
+  for(const n of rt.npcEntities) drawables.push({y:n.y, draw:()=>drawPersonSprite(wctx, n.x-camera.x, n.y-camera.y, n.role==='comerciante'?'#c98a3d':(n.role==='sabio'?'#6a5acd':'#3d8ac9'), '#3a3a3a', n.animPhase, false)});
+  for(const w of rt.wildEntities){
+    const species = SPECIES_BY_ID[w.speciesId];
+    drawables.push({y:w.y, draw:()=>{
+      if(w.habitat==='aereo'){ wctx.fillStyle='rgba(0,0,0,0.2)'; ell(wctx, w.x-camera.x, w.y-camera.y+18, 16,5,'rgba(0,0,0,0.2)',null); }
+      drawCreatureArt(wctx, species, w.x-camera.x, w.y-camera.y, TILE*1.3, {facing:w.facing, animT:w.animPhase, silhouette:false});
+    }});
+  }
+  if(rt.bossAlive){
+    const bossSpecies = SPECIES_BY_ID[rt.def.bossSpeciesId];
+    const bx = rt.map.bossSpot.x*TILE+TILE/2, by = rt.map.bossSpot.y*TILE+TILE/2;
+    drawables.push({y:by, draw:()=>{
+      drawGlowRingWrap(bx-camera.x,by-camera.y);
+      drawCreatureArt(wctx, bossSpecies, bx-camera.x, by-camera.y, TILE*2.1, {facing:'down', animT:performance.now()/1000, silhouette:false});
+    }});
+  }
+  drawables.push({y:player.y, draw:()=>drawPersonSprite(wctx, player.x-camera.x, player.y-camera.y, '#3fa9f5', '#1a3a5a', player.animPhase, player.moving)});
+  drawables.sort((a,b)=>a.y-b.y);
+  for(const d of drawables) d.draw();
+  renderWeather();
+  renderDayNightOverlay();
+}
+function drawGlowRingWrap(x,y){ wctx.save(); wctx.translate(x,y); drawGlowRing(wctx, TILE*1.6, '#ff6b6b'); wctx.restore(); }
+function renderWeather(){
+  const w = gameState.weather.current;
+  const ctx = wctx, W = worldCanvas.width, H = worldCanvas.height;
+  if(w==='lluvia' || w==='tormenta'){
+    ctx.strokeStyle = 'rgba(180,210,255,0.45)'; ctx.lineWidth=1.4;
+    for(const p of weatherParticles){
+      p.y += p.speed*(1/60); p.x += p.drift*0.02;
+      if(p.y>H){ p.y=-10; p.x=Math.random()*W; }
+      ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(p.x-3,p.y+12); ctx.stroke();
+    }
+    if(w==='tormenta' && Math.random()<0.004){
+      ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.fillRect(0,0,W,H);
+    }
+  } else if(w==='nieve'){
+    ctx.fillStyle='rgba(255,255,255,0.85)';
+    for(const p of weatherParticles){
+      p.y += p.speed*(1/60); p.x += Math.sin(p.y*0.01)*0.5;
+      if(p.y>H){ p.y=-10; p.x=Math.random()*W; }
+      ctx.beginPath(); ctx.arc(p.x,p.y,p.size,0,Math.PI*2); ctx.fill();
+    }
+  } else if(w==='niebla'){
+    ctx.fillStyle='rgba(200,205,215,0.10)';
+    for(const p of weatherParticles){
+      p.x += 6*(1/60); if(p.x>W+140) p.x=-140;
+      ctx.beginPath(); ctx.ellipse(p.x,p.y,p.size,p.size*0.4,0,0,Math.PI*2); ctx.fill();
+    }
+  }
+}
+function renderDayNightOverlay(){
+  const hour = gameState.clock.hour;
+  let alpha = 0;
+  if(hour<5) alpha=0.62; else if(hour<7) alpha=lerp(0.62,0,(hour-5)/2);
+  else if(hour<18) alpha=0; else if(hour<20) alpha=lerp(0,0.55,(hour-18)/2);
+  else alpha=0.55+ (hour-20)/4*0.07;
+  alpha = clamp(alpha,0,0.7);
+  if(gameState.weather.current==='niebla') alpha = Math.max(alpha,0.28);
+  if(gameState.weather.current==='tormenta') alpha = Math.max(alpha,0.32);
+  if(alpha>0.01){
+    wctx.fillStyle = `rgba(8,10,32,${alpha})`;
+    wctx.fillRect(0,0,worldCanvas.width,worldCanvas.height);
+  }
+}
+function updateMinimap(){
+  if(!mctx) return;
+  const rt = currentRuntime, map = rt.map;
+  mctx.clearRect(0,0,150,150);
+  const sx = 150/(map.width*TILE), sy = 150/(map.height*TILE);
+  mctx.fillStyle = tileBaseColors(map.ground)[0]; mctx.fillRect(0,0,150,150);
+  mctx.fillStyle='#8a7a5a'; mctx.fillRect((map.village.x-6)*TILE*sx,(map.village.y-6)*TILE*sy,12*TILE*sx,12*TILE*sy);
+  mctx.fillStyle='#c9a6ff'; mctx.beginPath(); mctx.arc(map.portalSpot.x*TILE*sx, map.portalSpot.y*TILE*sy, 4,0,Math.PI*2); mctx.fill();
+  if(rt.bossAlive){ mctx.fillStyle='#ff5555'; mctx.beginPath(); mctx.arc(map.bossSpot.x*TILE*sx, map.bossSpot.y*TILE*sy, 4,0,Math.PI*2); mctx.fill(); }
+  for(const w of rt.wildEntities){ mctx.fillStyle='#ffd23f'; mctx.beginPath(); mctx.arc(w.x*sx, w.y*sy, 2,0,Math.PI*2); mctx.fill(); }
+  mctx.fillStyle='#3fa9f5'; mctx.beginPath(); mctx.arc(player.x*sx, player.y*sy, 4,0,Math.PI*2); mctx.fill();
+}
+function updateHud(){
+  document.getElementById('hudWorldName').textContent = currentRuntime.biome.name;
+  document.getElementById('hudCoins').textContent = gameState.coins;
+  const isNight = isNightHour(gameState.clock.hour);
+  const timeStr = fmtTime(gameState.clock.hour, gameState.clock.minute);
+  document.getElementById('hudTimeWeather').textContent = (isNight?'🌙 ':'☀️ ')+timeStr+' · '+WEATHER_LABEL[gameState.weather.current];
+  const activeQuests = Object.values(gameState.quests).filter(q=>q.status==='active').length;
+  document.getElementById('btnOpenQuests').setAttribute('data-badge', String(activeQuests));
+}
+
+function enterWorld(biomeId, spawnAtPortal){
+  currentRuntime = getWorldRuntime(biomeId);
+  gameState.currentWorld = biomeId;
+  const map = currentRuntime.map;
+  if(spawnAtPortal){
+    player.x = map.portalSpot.x*TILE+TILE/2; player.y = (map.portalSpot.y+1)*TILE+TILE/2;
+  } else {
+    player.x = (gameState.playerPos.x||map.village.x)*TILE; player.y = (gameState.playerPos.y||map.village.y)*TILE;
+  }
+  currentRuntime.bossAlive = !gameState.bossesDefeated.includes(biomeId);
+  rebuildWeatherParticles();
+}
+
+function gameLoop(ts){
+  requestAnimationFrame(gameLoop);
+  if(!gameState || !currentRuntime || !worldCanvas) return;
+  const dt = Math.min(0.05, lastFrameTime? (ts-lastFrameTime)/1000 : 0.016);
+  lastFrameTime = ts;
+  updateClock(dt);
+  updateWeather(dt);
+  if(!inputLocked){
+    updatePlayerMovement(dt);
+    updateWildEntities(dt);
+    checkProximity();
+  }
+  updateCamera();
+  render();
+  hudUpdateAcc += dt;
+  if(hudUpdateAcc>0.25){ hudUpdateAcc=0; updateHud(); updateMinimap(); }
+}
+
+/* ---------------------------------------------------------------------
+   Entrada (teclado + táctil)
+   --------------------------------------------------------------------- */
+function setupInput(){
+  window.addEventListener('keydown', e=>{
+    keysDown[e.code]=true;
+    if(e.code==='KeyE'){ handleInteract(); }
+    if(e.code==='Escape'){ closeTopModal(); }
+  });
+  window.addEventListener('keyup', e=>{ keysDown[e.code]=false; });
+  window.addEventListener('resize', resizeCanvases);
+  const dpad = document.getElementById('dpad');
+  dpad.querySelectorAll('.dpad-btn').forEach(btn=>{
+    const dir = btn.getAttribute('data-dir');
+    const on = ev=>{ ev.preventDefault(); touchDir[dir]=true; };
+    const off = ev=>{ ev.preventDefault(); touchDir[dir]=false; };
+    btn.addEventListener('touchstart', on); btn.addEventListener('touchend', off);
+    btn.addEventListener('mousedown', on); btn.addEventListener('mouseup', off); btn.addEventListener('mouseleave', off);
+  });
+  document.getElementById('actionBtn').addEventListener('click', handleInteract);
+}
+function handleInteract(){
+  if(inputLocked) return;
+  if(!nearbyInteractable) return;
+  if(nearbyInteractable.type==='npc') openNpcDialogue(nearbyInteractable.ref);
+  else if(nearbyInteractable.type==='portal') openPortalChoice();
+  else if(nearbyInteractable.type==='wild') startWildBattle(nearbyInteractable.ref);
+  else if(nearbyInteractable.type==='boss') openBossConfirm(nearbyInteractable.ref);
+}
+
+/* =====================================================================
+   8. MOTOR DE COMBATE POR TURNOS
+   ===================================================================== */
+function wait(ms){ return new Promise(res=>setTimeout(res,ms)); }
+
+let combat = null;
+let combatCanvas, cctx, combatRafId=null;
+let combatFx = {playerFlash:0, enemyFlash:0, captureAnim:null};
+
+function activeTeamMember(){
+  if(!gameState.team.length) return null;
+  let idx = clamp(gameState.activeTeamIndex,0,gameState.team.length-1);
+  if(isFainted(gameState.team[idx])){
+    const alt = gameState.team.findIndex(c=>!isFainted(c));
+    if(alt>=0){ idx = alt; gameState.activeTeamIndex = alt; }
+  }
+  return gameState.team[idx];
+}
+function teamHasUsable(){ return gameState.team.some(c=>!isFainted(c)); }
+
+function combatDefenderElement(side){
+  return side==='enemy' ? SPECIES_BY_ID[combat.enemy.speciesId].element : SPECIES_BY_ID[activeTeamMember().speciesId].element;
+}
+function computeDamage(atkInst, atkSpecies, defInst, defSpecies, move){
+  const atkStat = atkInst.stats.atk * (atkInst.status==='miedo' ? 0.75 : 1);
+  const defStat = defInst.stats.def * (defInst.status==='defensabaja' ? 0.75 : 1);
+  const mult = typeMultiplier(move.element, defSpecies.element);
+  let dmg = Math.round((atkStat/Math.max(1,defStat)) * move.power * 0.45 * mult * rngRange(Math.random,0.85,1.0));
+  return {dmg: Math.max(1,dmg), mult};
+}
+function moveAccuracyRoll(atkInst, move){
+  let acc = move.acc;
+  if(atkInst.status==='cegado') acc *= 0.7;
+  return Math.random()*100 < acc;
+}
+function canActThisTurn(inst){
+  if(!inst.status) return {act:true};
+  if(inst.status==='paralizado'){ if(Math.random()<0.25) return {act:false, msg:creatureLabel(inst)+' está paralizado y no puede moverse.'}; }
+  if(inst.status==='congelado'){
+    if(Math.random()<0.25){ inst.status=null; return {act:true, msg:creatureLabel(inst)+' se ha descongelado.'}; }
+    return {act:false, msg:creatureLabel(inst)+' está congelado y no puede moverse.'};
+  }
+  if(inst.status==='dormido'){
+    if(Math.random()<0.3){ inst.status=null; return {act:true, msg:creatureLabel(inst)+' se ha despertado.'}; }
+    return {act:false, msg:creatureLabel(inst)+' está dormido.'};
+  }
+  if(inst.status==='confuso' && Math.random()<0.33){
+    const selfDmg = Math.max(1, Math.round(inst.stats.atk*0.18));
+    inst.currentHp = clamp(inst.currentHp-selfDmg,0,inst.stats.hp);
+    return {act:false, msg:creatureLabel(inst)+' está confuso y se ha herido a sí mismo.'};
+  }
+  return {act:true};
+}
+function creatureLabel(inst){
+  if(combat.enemy===inst) return SPECIES_BY_ID[inst.speciesId].name;
+  return creatureDisplayName(inst);
+}
+function statusEndOfTurn(inst){
+  if(!inst || isFainted(inst) || !inst.status) return null;
+  if(inst.status==='quemado' || inst.status==='envenenado'){
+    const pct = inst.status==='quemado'?0.06:0.08;
+    const dmg = Math.max(1, Math.round(inst.stats.hp*pct));
+    inst.currentHp = clamp(inst.currentHp-dmg,0,inst.stats.hp);
+    return creatureLabel(inst)+' sufre daño por estar '+STATUS_LABEL[inst.status].toLowerCase()+'.';
+  }
+  return null;
+}
+
+function buildEnemyFromWild(wildRef){
+  const inst = createCreatureInstance(wildRef.speciesId, wildRef.level);
+  return inst;
+}
+function buildEnemyBoss(worldDef){
+  const inst = createCreatureInstance(worldDef.bossSpeciesId, worldDef.bossLevel);
+  inst.stats.hp = Math.round(inst.stats.hp*1.4); inst.stats.atk = Math.round(inst.stats.atk*1.3);
+  inst.stats.def = Math.round(inst.stats.def*1.3); inst.stats.spd = Math.round(inst.stats.spd*1.15);
+  inst.currentHp = inst.stats.hp;
+  return inst;
+}
+
+function startWildBattle(wildRef){
+  if(!teamHasUsable()){ showToast('¡No tienes criaturas en condiciones de luchar!'); return; }
+  markSeen(wildRef.speciesId);
+  combat = {
+    mode:'wild', enemy: buildEnemyFromWild(wildRef), wildRef, biomeId: currentRuntime.biome.id,
+    over:false, playerFled:false
+  };
+  openCombatScreen();
+}
+function openBossConfirm(worldDef){
+  const species = SPECIES_BY_ID[worldDef.bossSpeciesId];
+  showChoiceDialogue('???', `Sientes una presencia poderosa: ${species.name}. ¿Deseas desafiarlo?`, [
+    {label:'Desafiar', action:()=>startBossBattle(worldDef)},
+    {label:'Retirarse', action:()=>{}}
+  ]);
+}
+function startBossBattle(worldDef){
+  if(!teamHasUsable()){ showToast('¡No tienes criaturas en condiciones de luchar!'); return; }
+  markSeen(worldDef.bossSpeciesId);
+  combat = { mode:'boss', enemy: buildEnemyBoss(worldDef), worldDef, biomeId: currentRuntime.biome.id, over:false };
+  openCombatScreen(true);
+}
+
+function openCombatScreen(isBoss){
+  inputLocked = true;
+  const scr = document.getElementById('combatScreen');
+  scr.classList.add('show');
+  document.getElementById('combatSubMenu').classList.remove('show');
+  document.getElementById('captureChanceTag').classList.remove('show');
+  document.querySelector('.combat-btn.capture').style.display = combat.mode==='boss' ? 'none' : '';
+  document.querySelector('.combat-btn.flee').style.display = combat.mode==='boss' ? 'none' : '';
+  if(isBoss){
+    document.getElementById('bossBannerName').textContent = SPECIES_BY_ID[combat.enemy.speciesId].name.toUpperCase();
+    document.getElementById('bossBannerSub').textContent = 'Guardián de '+BIOME_BY_ID[combat.biomeId].name;
+    document.getElementById('bossBanner').classList.add('show');
+    setTimeout(()=>document.getElementById('bossBanner').classList.remove('show'), 2400);
+  }
+  document.getElementById('combatLog').textContent = combat.mode==='boss' ? '¡Comienza el combate contra el jefe!' : '¡Un encuentro salvaje!';
+  combatCanvas = document.getElementById('combatCanvas');
+  cctx = combatCanvas.getContext('2d');
+  combatCanvas.width = combatCanvas.clientWidth; combatCanvas.height = combatCanvas.clientHeight;
+  refreshCombatUI();
+  if(combatRafId) cancelAnimationFrame(combatRafId);
+  combatRafLoop();
+}
+function combatRafLoop(){
+  combatRafId = requestAnimationFrame(combatRafLoop);
+  if(!combat || !cctx) return;
+  cctx.clearRect(0,0,combatCanvas.width,combatCanvas.height);
+  const t = performance.now()/1000;
+  const enemySpecies = SPECIES_BY_ID[combat.enemy.speciesId];
+  const player = activeTeamMember();
+  cctx.save();
+  if(combatFx.enemyFlash>0){ combatFx.enemyFlash-=0.05; }
+  drawCreatureArt(cctx, enemySpecies, combatCanvas.width*0.7, combatCanvas.height*0.36, Math.min(combatCanvas.width,combatCanvas.height)*(combat.mode==='boss'?0.5:0.34),
+    {facing:'left', animT:t*0.5, flash: combatFx.enemyFlash>0});
+  cctx.restore();
+  if(player){
+    const playerSpecies = SPECIES_BY_ID[player.speciesId];
+    if(combatFx.playerFlash>0){ combatFx.playerFlash-=0.05; }
+    drawCreatureArt(cctx, playerSpecies, combatCanvas.width*0.28, combatCanvas.height*0.72, Math.min(combatCanvas.width,combatCanvas.height)*0.3,
+      {facing:'right', animT:t*0.5+0.5, flash: combatFx.playerFlash>0});
+  }
+  if(combatFx.captureAnim){
+    const a = combatFx.captureAnim;
+    a.t += 1/60;
+    const prog = clamp(a.t/a.dur,0,1);
+    const x = lerp(combatCanvas.width*0.28, combatCanvas.width*0.7, Math.min(1,prog*2));
+    const y = lerp(combatCanvas.height*0.72, combatCanvas.height*0.36, Math.min(1,prog*2)) - Math.sin(Math.min(1,prog*2)*Math.PI)*60;
+    cctx.fillStyle = a.color||'#e63946';
+    cctx.beginPath();
+    let shakeX = 0;
+    if(prog>0.5) shakeX = Math.sin(a.t*40)*(a.shaking?6:0);
+    cctx.arc(x+shakeX, prog>0.5?combatCanvas.height*0.36:y, 14, 0, Math.PI*2);
+    cctx.fill();
+  }
+  closeCombatFinishCheck();
+}
+function closeCombatFinishCheck(){}
+
+function closeCombatScreen(){
+  inputLocked = false;
+  document.getElementById('combatScreen').classList.remove('show');
+  if(combatRafId){ cancelAnimationFrame(combatRafId); combatRafId=null; }
+  combat = null; combatFx = {playerFlash:0, enemyFlash:0, captureAnim:null};
+}
+
+function hpBarClass(ratio){ return ratio>0.5?'':ratio>0.2?'mid':'low'; }
+function refreshCombatUI(){
+  const e = combat.enemy, eSpecies = SPECIES_BY_ID[e.speciesId];
+  const p = activeTeamMember();
+  document.getElementById('enemyName').textContent = eSpecies.name;
+  document.getElementById('enemyLvl').textContent = 'Nv.'+e.level;
+  const eRatio = e.currentHp/e.stats.hp;
+  document.getElementById('enemyHpBar').style.width = (eRatio*100)+'%';
+  document.getElementById('enemyHpBar').className = 'hpinner '+hpBarClass(eRatio);
+  document.getElementById('enemyHpText').textContent = e.currentHp+' / '+e.stats.hp;
+  const eStatusEl = document.getElementById('enemyStatus');
+  if(e.status){ eStatusEl.style.display='inline-block'; eStatusEl.textContent = STATUS_LABEL[e.status]; } else eStatusEl.style.display='none';
+
+  if(p){
+    document.getElementById('playerName').textContent = creatureDisplayName(p);
+    document.getElementById('playerLvl').textContent = 'Nv.'+p.level;
+    const pRatio = p.currentHp/p.stats.hp;
+    document.getElementById('playerHpBar').style.width=(pRatio*100)+'%';
+    document.getElementById('playerHpBar').className = 'hpinner '+hpBarClass(pRatio);
+    document.getElementById('playerHpText').textContent = p.currentHp+' / '+p.stats.hp;
+    const pStatusEl = document.getElementById('playerStatus');
+    if(p.status){ pStatusEl.style.display='inline-block'; pStatusEl.textContent = STATUS_LABEL[p.status]; } else pStatusEl.style.display='none';
+  }
+}
+function logMsg(text){ document.getElementById('combatLog').textContent = text; }
+function showSubMenu(items){
+  const el = document.getElementById('combatSubMenu');
+  el.innerHTML='';
+  for(const it of items){
+    const b = document.createElement('button');
+    b.className='sub-btn';
+    b.innerHTML = it.title+(it.subtitle?'<small>'+it.subtitle+'</small>':'');
+    b.disabled = !!it.disabled;
+    b.onclick = it.onClick;
+    el.appendChild(b);
+  }
+  const back = document.createElement('button');
+  back.className='sub-btn'; back.innerHTML='← Volver'; back.onclick=()=>el.classList.remove('show');
+  el.appendChild(back);
+  el.classList.add('show');
+}
+
+async function playerUseMove(move){
+  document.getElementById('combatSubMenu').classList.remove('show');
+  const p = activeTeamMember(); const pSpecies = SPECIES_BY_ID[p.speciesId];
+  const e = combat.enemy; const eSpecies = SPECIES_BY_ID[e.speciesId];
+  const check = canActThisTurn(p);
+  if(!check.act){ logMsg(check.msg); await wait(1000); return enemyTurn(); }
+  if(check.msg) logMsg(check.msg);
+  logMsg(creatureDisplayName(p)+' usa '+move.name+'!');
+  await wait(500);
+  if(!moveAccuracyRoll(p, move)){ logMsg('¡El ataque falló!'); await wait(700); return enemyTurn(); }
+  const {dmg, mult} = computeDamage(p, pSpecies, e, eSpecies, move);
+  e.currentHp = clamp(e.currentHp-dmg,0,e.stats.hp);
+  combatFx.enemyFlash = 1;
+  refreshCombatUI();
+  logMsg('¡Golpe de '+dmg+' de daño!'+(mult>1?' ¡Es muy eficaz!':mult<1?' No es muy eficaz...':''));
+  if(move.status && move.status.id && !e.status && Math.random()<move.status.chance){
+    e.status = move.status.id; refreshCombatUI();
+    await wait(600); logMsg(SPECIES_BY_ID[e.speciesId].name+' ha quedado '+STATUS_LABEL[e.status].toLowerCase()+'.');
+  }
+  await wait(800);
+  if(e.currentHp<=0) return handleVictory();
+  return enemyTurn();
+}
+async function enemyTurn(){
+  const e = combat.enemy; const eSpecies = SPECIES_BY_ID[e.speciesId];
+  const p = activeTeamMember();
+  if(!p || isFainted(p)) return; // se gestiona en handleFaintCheck
+  const check = canActThisTurn(e);
+  if(!check.act){ logMsg(check.msg); await wait(900); return endRound(); }
+  const moves = availableMoves(eSpecies, e.level);
+  const move = Math.random()<0.55 ? moves[0] : rngPick(Math.random, moves);
+  logMsg(eSpecies.name+' usa '+move.name+'!');
+  await wait(600);
+  if(!moveAccuracyRoll(e, move)){ logMsg('¡El ataque enemigo falló!'); await wait(700); return endRound(); }
+  const pSpecies = SPECIES_BY_ID[p.speciesId];
+  const {dmg, mult} = computeDamage(e, eSpecies, p, pSpecies, move);
+  p.currentHp = clamp(p.currentHp-dmg,0,p.stats.hp);
+  combatFx.playerFlash = 1;
+  refreshCombatUI();
+  logMsg(creatureDisplayName(p)+' recibe '+dmg+' de daño.'+(mult>1?' ¡Es muy eficaz!':mult<1?' No es muy eficaz...':''));
+  if(move.status && move.status.id && !p.status && Math.random()<move.status.chance){
+    p.status = move.status.id; refreshCombatUI();
+    await wait(600); logMsg(creatureDisplayName(p)+' ha quedado '+STATUS_LABEL[p.status].toLowerCase()+'.');
+  }
+  await wait(800);
+  if(p.currentHp<=0){ refreshCombatUI(); await wait(500); return handleFaint(); }
+  return endRound();
+}
+async function endRound(){
+  const msgs = [statusEndOfTurn(combat.enemy), statusEndOfTurn(activeTeamMember())].filter(Boolean);
+  for(const m of msgs){ logMsg(m); refreshCombatUI(); await wait(700); }
+  if(combat.enemy.currentHp<=0) return handleVictory();
+  const p = activeTeamMember();
+  if(p && p.currentHp<=0) return handleFaint();
+  logMsg('¿Qué desea hacer '+ (p?creatureDisplayName(p):'tu equipo') +'?');
+}
+async function handleFaint(){
+  logMsg(creatureDisplayName(activeTeamMember())+' se ha debilitado.');
+  await wait(900);
+  if(!teamHasUsable()){ return handleDefeat(); }
+  showSubMenu(gameState.team.map((c,i)=>({
+    title: creatureDisplayName(c)+' (Nv.'+c.level+')', subtitle: isFainted(c)?'Debilitado':(c.currentHp+'/'+c.stats.hp+' HP'),
+    disabled: isFainted(c),
+    onClick: ()=>{ gameState.activeTeamIndex=i; document.getElementById('combatSubMenu').classList.remove('show'); refreshCombatUI(); logMsg('¡Adelante, '+creatureDisplayName(c)+'!'); }
+  })));
+}
+function handleDefeat(){
+  showToast('Tu equipo ha sido derrotado. Vuelves al pueblo para recuperarte.');
+  for(const c of gameState.team) c.currentHp = Math.max(1, Math.round(c.stats.hp*0.5));
+  gameState.coins = Math.round(gameState.coins*0.9);
+  closeCombatScreen();
+  const map = currentRuntime.map;
+  player.x = map.village.x*TILE; player.y = map.village.y*TILE;
+  saveGame();
+}
+async function handleVictory(){
+  combat.over = true;
+  const eSpecies = SPECIES_BY_ID[combat.enemy.speciesId];
+  logMsg('¡Has vencido a '+eSpecies.name+'!');
+  await wait(900);
+  const isBoss = combat.mode==='boss';
+  const xpGain = Math.round(combat.enemy.level * 8 * RARITY_BY_ID[eSpecies.rarity].xpMult * (isBoss?2.4:1));
+  const coinGain = Math.round(combat.enemy.level*(isBoss?18:4) + rngInt(Math.random,0,20));
+  gameState.coins += coinGain;
+  const p = activeTeamMember();
+  let levelMsg = '';
+  if(p){
+    const res = grantXp(p, xpGain);
+    if(res.leveled) levelMsg = ' '+creatureDisplayName(p)+' sube a nivel '+p.level+'!';
+  }
+  logMsg('Ganas '+coinGain+' monedas y '+xpGain+' de experiencia.'+levelMsg);
+  await wait(1200);
+  if(Math.random()<0.45){
+    const mat = rngPick(Math.random, MATERIALS);
+    invAdd(mat.id,1);
+    logMsg('Encuentras: '+mat.name+'.');
+    await wait(900);
+  }
+  if(isBoss){
+    gameState.bossesDefeated.push(combat.biomeId);
+    invAdd('llave_'+combat.biomeId, 1);
+    const nxt = nextWorldId(combat.biomeId);
+    if(nxt && !gameState.unlockedWorlds.includes(nxt)){ gameState.unlockedWorlds.push(nxt); showToast('🗝️ Has obtenido la '+keyItemName(combat.biomeId)+' y desbloqueado '+BIOME_BY_ID[nxt].name+'!'); }
+    else showToast('🗝️ Has obtenido la '+keyItemName(combat.biomeId)+'!');
+    currentRuntime.bossAlive = false;
+    onQuestEvent('defeat_boss', combat.biomeId);
+  } else {
+    const idx = currentRuntime.wildEntities.findIndex(w=>w.uid===combat.wildRef.uid);
+    if(idx>=0) currentRuntime.wildEntities.splice(idx,1);
+  }
+  const unlocked = checkAchievements();
+  for(const a of unlocked) showAchievementToast(a);
+  saveGame();
+  closeCombatScreen();
+}
+function fleeAttempt(){
+  const p = activeTeamMember(); const e = combat.enemy;
+  const chance = clamp(0.5 + (p.stats.spd-e.stats.spd)/150, 0.1, 0.92);
+  if(Math.random()<chance){ logMsg('¡Has escapado con éxito!'); setTimeout(closeCombatScreen, 900); }
+  else { logMsg('¡No has podido escapar!'); enemyTurn(); }
+}
+
+function captureChanceFor(capsule){
+  const e = combat.enemy; const species = SPECIES_BY_ID[e.speciesId];
+  const hpRatio = e.currentHp/e.stats.hp;
+  const rarity = RARITY_BY_ID[species.rarity];
+  let base = capsule.power * rarity.catchMod * (1.6-hpRatio)/1.6;
+  if(capsule.habitatBonus && species.habitat===capsule.habitatBonus) base *= capsule.habitatMult;
+  if(e.status) base *= 1.25;
+  base *= (1 - clamp((e.level-1)/260,0,0.35));
+  let chance = clamp(base, 0.03, capsule.maxCap);
+  if(species.rarity==='divina') chance = Math.min(chance,0.28);
+  else if(species.rarity==='secreta') chance = Math.min(chance,0.35);
+  else if(species.rarity==='prohibida') chance = Math.min(chance,0.42);
+  return chance;
+}
+function openCaptureMenu(){
+  const items = CAPSULES.filter(c=>invCount(c.id)>0).map(c=>({
+    title:c.name+' x'+invCount(c.id), subtitle:c.desc,
+    onClick:()=>showCapturePrompt(c)
+  }));
+  if(!items.length){ logMsg('No te quedan cápsulas de captura.'); return; }
+  showSubMenu(items);
+}
+function showCapturePrompt(capsule){
+  document.getElementById('combatSubMenu').classList.remove('show');
+  const chance = captureChanceFor(capsule);
+  document.getElementById('captureChancePct').textContent = Math.round(chance*100)+'%';
+  document.getElementById('captureCapsuleName').textContent = capsule.name;
+  document.getElementById('captureChanceTag').classList.add('show');
+  document.getElementById('btnThrowCapsule').onclick = ()=>{ document.getElementById('captureChanceTag').classList.remove('show'); throwCapsule(capsule, chance); };
+  document.getElementById('btnCancelCapture').onclick = ()=>document.getElementById('captureChanceTag').classList.remove('show');
+}
+async function throwCapsule(capsule, chance){
+  invRemove(capsule.id,1);
+  logMsg('¡Lanzas una '+capsule.name+'!');
+  combatFx.captureAnim = {t:0, dur:1.1, color:'#e63946', shaking:false};
+  await wait(500);
+  combatFx.captureAnim.shaking = true;
+  const success = Math.random()<chance;
+  const shakes = success ? 3 : rngInt(Math.random,1,2);
+  for(let i=0;i<shakes;i++) await wait(430);
+  await wait(300);
+  combatFx.captureAnim = null;
+  if(success){
+    const e = combat.enemy; const species = SPECIES_BY_ID[e.speciesId];
+    logMsg('¡Capturado! '+species.name+' se ha unido a tu colección.');
+    markCaught(species.id, e.level);
+    if(!gameState.biomeCollectionSeen[combat.biomeId]) gameState.biomeCollectionSeen[combat.biomeId]={};
+    gameState.biomeCollectionSeen[combat.biomeId][species.id]=true;
+    const newInst = createCreatureInstance(species.id, e.level, {currentHp:e.currentHp});
+    if(gameState.team.length<6) gameState.team.push(newInst); else gameState.box.push(newInst);
+    const idx = currentRuntime.wildEntities.findIndex(w=>w.uid===combat.wildRef.uid);
+    if(idx>=0) currentRuntime.wildEntities.splice(idx,1);
+    onQuestEvent('capture_any', 1);
+    onQuestEvent('capture_habitat', species.habitat);
+    onQuestEvent('capture_rarity', species.rarity);
+    const unlocked = checkAchievements();
+    for(const a of unlocked) showAchievementToast(a);
+    saveGame();
+    await wait(1000);
+    closeCombatScreen();
+  } else {
+    logMsg('¡Oh no! La criatura ha escapado de la cápsula.');
+    await wait(900);
+    enemyTurn();
+  }
+}
+
+function setupCombatMenu(){
+  document.querySelectorAll('#combatMenu .combat-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      if(!combat || combat.over) return;
+      const act = btn.getAttribute('data-act');
+      document.getElementById('combatSubMenu').classList.remove('show');
+      if(act==='attack'){
+        const p = activeTeamMember(); const species = SPECIES_BY_ID[p.speciesId];
+        playerUseMove(species.moves[0]);
+      } else if(act==='special'){
+        const p = activeTeamMember(); const species = SPECIES_BY_ID[p.speciesId];
+        const moves = availableMoves(species, p.level).filter(m=>m.kind==='especial');
+        if(!moves.length){ logMsg('Aún no has desbloqueado habilidades especiales.'); return; }
+        showSubMenu(moves.map(m=>({title:m.name, subtitle:'Poder '+m.power+' · Precisión '+m.acc+'%', onClick:()=>playerUseMove(m)})));
+      } else if(act==='item'){
+        const p = activeTeamMember();
+        const usable = CONSUMABLES.filter(it=>invCount(it.id)>0 && (isFainted(p) ? it.revive : !it.revive));
+        if(!usable.length){ logMsg('No tienes objetos utilizables ahora mismo.'); return; }
+        showSubMenu(usable.map(it=>({title:it.name+' x'+invCount(it.id), subtitle:it.desc, onClick:()=>useItemInCombat(it)})));
+      } else if(act==='capture'){
+        openCaptureMenu();
+      } else if(act==='switch'){
+        showSubMenu(gameState.team.map((c,i)=>({
+          title:creatureDisplayName(c)+' (Nv.'+c.level+')', subtitle: isFainted(c)?'Debilitado':(c.currentHp+'/'+c.stats.hp+' HP'),
+          disabled: isFainted(c) || i===gameState.activeTeamIndex,
+          onClick: async ()=>{ document.getElementById('combatSubMenu').classList.remove('show'); gameState.activeTeamIndex=i; refreshCombatUI(); logMsg('¡Adelante, '+creatureDisplayName(c)+'!'); await wait(700); enemyTurn(); }
+        })));
+      } else if(act==='flee'){
+        fleeAttempt();
+      }
+    });
+  });
+}
+async function useItemInCombat(item){
+  document.getElementById('combatSubMenu').classList.remove('show');
+  const p = activeTeamMember();
+  invRemove(item.id,1);
+  if(item.revive){ p.currentHp = Math.round(p.stats.hp*item.healPercent); logMsg(creatureDisplayName(p)+' ha sido revivido!'); }
+  else if(item.cureStatus){ p.status=null; logMsg(creatureDisplayName(p)+' se ha curado de su estado alterado.'); }
+  else { p.currentHp = clamp(p.currentHp+Math.round(p.stats.hp*item.healPercent),0,p.stats.hp); logMsg(creatureDisplayName(p)+' recupera vida.'); }
+  refreshCombatUI();
+  await wait(800);
+  enemyTurn();
+}
+
+/* =====================================================================
+   9. PANELES DE INTERFAZ, DIÁLOGOS, TIENDA, MISIONES Y LOGROS
+   ===================================================================== */
+const openOverlays = new Set();
+function openModal(id){ document.getElementById(id).classList.add('show'); openOverlays.add(id); inputLocked=true; }
+function closeModal(id){ document.getElementById(id).classList.remove('show'); openOverlays.delete(id); if(openOverlays.size===0) inputLocked=false; }
+function closeTopModal(){
+  if(openOverlays.size){ const last=[...openOverlays][openOverlays.size-1]; if(last==='dialogueBox') closeDialogue(); else closeModal(last); }
+}
+
+/* ---- Toasts ---- */
+function showToast(text){
+  const el = document.createElement('div'); el.className='toast'; el.textContent=text;
+  document.getElementById('toastStack').appendChild(el);
+  setTimeout(()=>el.remove(), 3700);
+}
+function showAchievementToast(a){
+  const el = document.createElement('div'); el.className='toast achievement'; el.innerHTML='🏆 Logro desbloqueado: <b>'+a.name+'</b>';
+  document.getElementById('toastStack').appendChild(el);
+  setTimeout(()=>el.remove(), 3700);
+}
+
+/* ---- Diálogos de NPC / sistema ---- */
+let dialogueQueue = [];
+let dialogueChoicesFinal = [];
+function startDialogue(name, lines, choices){
+  document.getElementById('dlgName').textContent = name;
+  dialogueQueue = lines.slice();
+  dialogueChoicesFinal = choices||[];
+  openOverlays.add('dialogueBox'); inputLocked = true;
+  document.getElementById('dialogueBox').classList.add('show');
+  document.getElementById('dlgChoices').style.display='none';
+  document.getElementById('dlgChoices').innerHTML='';
+  document.getElementById('dlgHint').style.display='block';
+  advanceDialogue();
+}
+function advanceDialogue(){
+  if(dialogueQueue.length){
+    document.getElementById('dlgText').textContent = dialogueQueue.shift();
+  } else {
+    finishDialogueWithChoices();
+  }
+}
+function finishDialogueWithChoices(){
+  if(dialogueChoicesFinal && dialogueChoicesFinal.length>1){
+    document.getElementById('dlgHint').style.display='none';
+    const cWrap = document.getElementById('dlgChoices'); cWrap.innerHTML=''; cWrap.style.display='flex';
+    for(const c of dialogueChoicesFinal){
+      const b=document.createElement('button'); b.textContent=c.label;
+      b.onclick=()=>{ closeDialogue(); c.action(); };
+      cWrap.appendChild(b);
+    }
+  } else {
+    closeDialogue();
+    if(dialogueChoicesFinal[0]) dialogueChoicesFinal[0].action();
+  }
+}
+function closeDialogue(){
+  document.getElementById('dialogueBox').classList.remove('show');
+  openOverlays.delete('dialogueBox');
+  if(openOverlays.size===0) inputLocked=false;
+}
+function showChoiceDialogue(name, text, choices){ startDialogue(name, [text], choices); }
+
+function openNpcDialogue(npc){
+  if(!gameState.npcTalked.includes(npc.id)) gameState.npcTalked.push(npc.id);
+  onQuestEvent('talk_npc', npc.id);
+  const lines = npc.lines.slice();
+  const offered = QUESTS.filter(q=>q.giverNpcId===npc.id);
+  const extraChoices = [];
+  for(const q of offered){
+    const rec = gameState.quests[q.id];
+    if(!rec) extraChoices.push({label:'Aceptar misión: '+q.title, action:()=>{ acceptQuest(q.id); showToast('📜 Misión aceptada: '+q.title); updateQuestBadge(); }});
+    else if(rec.status==='active') lines.push('(Misión en curso: "'+q.title+'")');
+    else if(rec.status==='completed') lines.push('Gracias de nuevo por tu ayuda.');
+  }
+  if(npc.shop) extraChoices.push({label:'Ver tienda', action:()=>openShop()});
+  extraChoices.push({label:'Adiós', action:()=>{}});
+  startDialogue(npc.name, lines, extraChoices);
+}
+function openPortalChoice(){
+  const rt = currentRuntime;
+  const idx = WORLD_ORDER_LIST.indexOf(rt.biome.id);
+  const choices = [];
+  const nxt = nextWorldId(rt.biome.id);
+  if(nxt){
+    if(gameState.unlockedWorlds.includes(nxt)) choices.push({label:'Viajar a '+BIOME_BY_ID[nxt].name, action:()=>travelTo(nxt, false)});
+    else choices.push({label:'??? (derrota al guardián de '+rt.biome.name+' para desbloquear)', action:()=>{}});
+  }
+  if(idx>0){ const prev = WORLD_ORDER_LIST[idx-1]; choices.push({label:'Volver a '+BIOME_BY_ID[prev].name, action:()=>travelTo(prev, false)}); }
+  choices.push({label:'Cancelar', action:()=>{}});
+  showChoiceDialogue('Portal', 'El portal resplandece con energía. ¿A dónde deseas viajar?', choices);
+}
+function travelTo(biomeId){
+  enterWorld(biomeId, true);
+  showToast('🌍 Has llegado a '+BIOME_BY_ID[biomeId].name);
+  saveGame();
+}
+
+/* ---------------------------------------------------------------------
+   Misiones: aceptar / progresar / completar
+   --------------------------------------------------------------------- */
+function acceptQuest(id){ if(!gameState.quests[id]) gameState.quests[id] = {status:'active', progress:0}; updateQuestBadge(); }
+function completeQuestReward(q){
+  const rec = gameState.quests[q.id]; if(!rec || rec.status==='completed') return;
+  rec.status='completed';
+  if(q.reward.coins) gameState.coins += q.reward.coins;
+  if(q.reward.items) for(const it of q.reward.items) invAdd(it.id, it.qty);
+  showToast('✅ Misión completada: '+q.title);
+  updateQuestBadge();
+}
+function onQuestEvent(type, data){
+  for(const q of QUESTS){
+    const rec = gameState.quests[q.id];
+    if(!rec || rec.status!=='active') continue;
+    let done=false;
+    if(q.type==='capture_any' && type==='capture_any'){ rec.progress=(rec.progress||0)+1; if(rec.progress>=q.target) done=true; }
+    else if(q.type==='talk_npc' && type==='talk_npc' && data===q.target) done=true;
+    else if(q.type==='defeat_boss' && type==='defeat_boss' && data===q.target) done=true;
+    else if(q.type==='discover_ruin' && type==='discover_ruin' && data===q.target) done=true;
+    else if(q.type==='capture_habitat' && type==='capture_habitat' && data===q.target) done=true;
+    else if(q.type==='capture_rarity' && type==='capture_rarity' && RARITY_ORDER.indexOf(data)>=RARITY_ORDER.indexOf(q.target)) done=true;
+    if(done) completeQuestReward(q);
+  }
+  if(type==='capture_any' && data && gameState){
+    // registra colección por bioma para misiones de tipo complete_biome_collection
+  }
+  updateQuestProgressAuto();
+  for(const q of QUESTS){
+    const rec = gameState.quests[q.id];
+    if(rec && rec.status==='active'){
+      if(q.type==='dex_count' && rec.progress>=q.target) completeQuestReward(q);
+      if(q.type==='complete_biome_collection' && rec.progress>=q.count) completeQuestReward(q);
+    }
+  }
+  const unlocked = checkAchievements();
+  for(const a of unlocked) showAchievementToast(a);
+}
+function updateQuestBadge(){
+  const n = Object.values(gameState.quests).filter(q=>q.status==='active').length;
+  document.getElementById('btnOpenQuests').setAttribute('data-badge', String(n));
+}
+
+/* ---------------------------------------------------------------------
+   Panel: Equipo
+   --------------------------------------------------------------------- */
+function renderPartyBar(){
+  const bar = document.getElementById('partyBar'); bar.innerHTML='';
+  gameState.team.forEach((c,i)=>{
+    const species = SPECIES_BY_ID[c.speciesId];
+    const slot = document.createElement('div');
+    slot.className = 'party-slot'+(isFainted(c)?' fainted':'')+(i===gameState.activeTeamIndex?' active':'');
+    slot.innerHTML = `<div class="lvl">Nv${c.level}</div><canvas width="60" height="60"></canvas><div class="hpbar"><i style="width:${Math.round(c.currentHp/c.stats.hp*100)}%"></i></div>`;
+    bar.appendChild(slot);
+    renderSpeciesToCanvas(slot.querySelector('canvas'), species.id, {animT:0.25});
+  });
+}
+function renderPartyModal(){
+  const body = document.getElementById('partyModalBody'); body.innerHTML='';
+  if(!gameState.team.length) body.innerHTML = '<p style="color:var(--ui-text-dim)">No tienes criaturas en tu equipo todavía.</p>';
+  const grid = document.createElement('div'); grid.className='grid g4';
+  gameState.team.forEach((c,i)=>{
+    const species = SPECIES_BY_ID[c.speciesId];
+    const rarity = RARITY_BY_ID[species.rarity];
+    const card = document.createElement('div'); card.className='card'; card.style.cursor='default';
+    card.innerHTML = `<canvas width="120" height="90"></canvas>
+      <div class="name">${creatureDisplayName(c)}</div>
+      <div class="sub">Nv.${c.level} · ${species.archetypeLabel}</div>
+      <span class="rarity-tag" style="background:${rarity.color}22; color:${rarity.color}">${rarity.name}</span>
+      <div style="margin-top:6px; font-size:0.72rem; text-align:left;">
+        HP ${c.currentHp}/${c.stats.hp}<br>ATQ ${c.stats.atk} · DEF ${c.stats.def} · VEL ${c.stats.spd}<br>
+        XP ${c.xp}/${c.xpNext}
+      </div>
+      <div style="margin-top:6px; display:flex; gap:4px; flex-wrap:wrap; justify-content:center;">
+        ${gameState.team.length>1?'<button class="icon-btn" data-box="'+i+'" style="font-size:0.65rem; padding:4px 8px;">A la caja</button>':''}
+      </div>`;
+    grid.appendChild(card);
+    renderSpeciesToCanvas(card.querySelector('canvas'), species.id, {animT:0.25});
+  });
+  body.appendChild(grid);
+  body.querySelectorAll('[data-box]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const i = parseInt(btn.getAttribute('data-box'));
+      gameState.box.push(gameState.team.splice(i,1)[0]);
+      gameState.activeTeamIndex = 0;
+      renderPartyModal(); renderPartyBar(); saveGame();
+    };
+  });
+  if(gameState.box.length){
+    const h = document.createElement('h3'); h.textContent='Caja de Criaturas'; h.style.marginTop='18px'; body.appendChild(h);
+    const grid2 = document.createElement('div'); grid2.className='grid g4';
+    gameState.box.forEach((c,i)=>{
+      const species = SPECIES_BY_ID[c.speciesId];
+      const card = document.createElement('div'); card.className='card'; card.style.cursor='default';
+      card.innerHTML = `<canvas width="120" height="90"></canvas><div class="name">${creatureDisplayName(c)}</div><div class="sub">Nv.${c.level}</div>
+        <button class="icon-btn" data-team="${i}" style="font-size:0.65rem; padding:4px 8px; margin-top:6px;" ${gameState.team.length>=6?'disabled':''}>Al equipo</button>`;
+      grid2.appendChild(card);
+      renderSpeciesToCanvas(card.querySelector('canvas'), species.id, {animT:0.25});
+    });
+    body.appendChild(grid2);
+    body.querySelectorAll('[data-team]').forEach(btn=>{
+      btn.onclick = ()=>{
+        const i = parseInt(btn.getAttribute('data-team'));
+        if(gameState.team.length<6){ gameState.team.push(gameState.box.splice(i,1)[0]); renderPartyModal(); renderPartyBar(); saveGame(); }
+      };
+    });
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Panel: Inventario
+   --------------------------------------------------------------------- */
+const INV_TABS = [
+  {id:'capsula', label:'Cápsulas'}, {id:'pocion', label:'Pociones y Comida'},
+  {id:'material', label:'Materiales'}, {id:'mejora', label:'Mejoras'}, {id:'llave', label:'Llaves'}
+];
+let invActiveTab = 'capsula';
+function renderInventoryTabs(){
+  const tabsEl = document.getElementById('invTabs'); tabsEl.innerHTML='';
+  for(const t of INV_TABS){
+    const b = document.createElement('button'); b.className='modal-tab'+(t.id===invActiveTab?' active':''); b.textContent=t.label;
+    b.onclick = ()=>{ invActiveTab=t.id; renderInventoryTabs(); renderInventoryBody(); };
+    tabsEl.appendChild(b);
+  }
+}
+function renderInventoryBody(){
+  const body = document.getElementById('invBody'); body.innerHTML='';
+  const items = ITEMS_CATALOG.filter(it=>{
+    if(invActiveTab==='pocion') return it.type==='pocion'||it.type==='comida';
+    if(invActiveTab==='llave') return it.type==='llave' && invCount(it.id)>0;
+    return it.type===invActiveTab;
+  });
+  if(invActiveTab==='llave' && !items.length){
+    body.innerHTML = '<p style="color:var(--ui-text-dim)">Aún no has conseguido ninguna llave. Derrota a los guardianes de cada mundo para conseguirlas.</p>';
+    return;
+  }
+  const grid = document.createElement('div'); grid.className='grid g4';
+  for(const it of items){
+    const qty = invCount(it.id);
+    const card = document.createElement('div'); card.className='card item-card'; card.style.cursor='default';
+    card.innerHTML = `<div style="font-size:2rem;">${itemEmoji(it)}</div><div class="name">${it.name}</div>
+      <div class="count">x${qty}</div><div class="sub">${it.desc||''}</div>
+      <div style="margin-top:6px; display:flex; gap:4px; justify-content:center; flex-wrap:wrap;">
+      ${(it.type==='pocion'||it.type==='comida') ? '<button class="icon-btn" data-use="'+it.id+'" style="font-size:0.65rem; padding:4px 8px;" '+(qty<1?'disabled':'')+'>Usar</button>' : ''}
+      ${it.type==='material' ? '<button class="icon-btn" data-sell="'+it.id+'" style="font-size:0.65rem; padding:4px 8px;" '+(qty<1?'disabled':'')+'>Vender ('+it.sellPrice+'🪙)</button>' : ''}
+      ${it.type==='mejora' ? '<button class="icon-btn" data-buyupg="'+it.id+'" style="font-size:0.65rem; padding:4px 8px;">Comprar ('+it.price+'🪙)</button>' : ''}
+      </div>`;
+    grid.appendChild(card);
+  }
+  body.appendChild(grid);
+  body.querySelectorAll('[data-use]').forEach(btn=> btn.onclick=()=>promptUseItemOutOfCombat(btn.getAttribute('data-use')));
+  body.querySelectorAll('[data-sell]').forEach(btn=> btn.onclick=()=>{
+    const id = btn.getAttribute('data-sell'); const it = ITEM_BY_ID[id];
+    if(invCount(id)>0){ invRemove(id,1); gameState.coins+=it.sellPrice; showToast('Vendido '+it.name+' por '+it.sellPrice+' monedas.'); renderInventoryBody(); saveGame(); }
+  });
+  body.querySelectorAll('[data-buyupg]').forEach(btn=> btn.onclick=()=>{
+    const id = btn.getAttribute('data-buyupg'); const it = ITEM_BY_ID[id];
+    if(gameState.coins>=it.price){ gameState.coins-=it.price; gameState.bagCapacityMult=(gameState.bagCapacityMult||1)+0.5; showToast('¡Capacidad de inventario ampliada!'); renderInventoryBody(); saveGame(); }
+    else showToast('No tienes suficientes monedas.');
+  });
+}
+function itemEmoji(it){
+  if(it.type==='capsula') return '🔮'; if(it.id==='revivir') return '💫'; if(it.type==='pocion') return '🧪';
+  if(it.type==='comida') return '🍓'; if(it.type==='material') return '💠'; if(it.type==='mejora') return '🎒'; if(it.type==='llave') return '🗝️'; return '📦';
+}
+function promptUseItemOutOfCombat(itemId){
+  const it = ITEM_BY_ID[itemId];
+  if(invCount(itemId)<1) return;
+  if(!gameState.team.length){ showToast('No tienes criaturas en tu equipo.'); return; }
+  const choices = gameState.team.map((c,i)=>({
+    label: creatureDisplayName(c)+' ('+c.currentHp+'/'+c.stats.hp+' HP)'+(c.status?' · '+STATUS_LABEL[c.status]:''),
+    action: ()=>{
+      if(it.revive && !isFainted(c)){ showToast(creatureDisplayName(c)+' no está debilitado.'); return; }
+      if(!it.revive && isFainted(c)){ showToast(creatureDisplayName(c)+' está debilitado. Usa Revivir.'); return; }
+      invRemove(itemId,1);
+      if(it.revive) c.currentHp = Math.round(c.stats.hp*it.healPercent);
+      else if(it.cureStatus) c.status=null;
+      else c.currentHp = clamp(c.currentHp+Math.round(c.stats.hp*it.healPercent),0,c.stats.hp);
+      showToast('Has usado '+it.name+' en '+creatureDisplayName(c)+'.');
+      renderPartyBar(); renderInventoryBody(); saveGame();
+    }
+  }));
+  choices.push({label:'Cancelar', action:()=>{}});
+  showChoiceDialogue('Usar '+it.name, '¿En qué criatura deseas usar '+it.name+'?', choices);
+}
+
+/* ---------------------------------------------------------------------
+   Panel: Enciclopedia
+   --------------------------------------------------------------------- */
+function renderDexModal(){
+  const grid = document.getElementById('dexGrid'); grid.innerHTML='';
+  document.getElementById('dexProgress').textContent = 'Progreso: '+dexCaughtCount()+' / '+SPECIES_CATALOG.length+' capturadas · '+dexSeenOrCaughtCount()+' vistas';
+  document.getElementById('dexDetail').classList.remove('show');
+  for(const s of SPECIES_CATALOG){
+    const e = gameState.dex[s.id];
+    const discovered = e && (e.seen||e.caught);
+    const rarity = RARITY_BY_ID[s.rarity];
+    const card = document.createElement('div'); card.className='card';
+    card.innerHTML = `<canvas width="90" height="64"></canvas><div class="name">${discovered? s.name : '???'}</div>
+      <div class="sub">#${s.dexNum}</div>
+      ${discovered?'<span class="rarity-tag" style="background:'+rarity.color+'22; color:'+rarity.color+'">'+rarity.name+'</span>':''}`;
+    grid.appendChild(card);
+    renderSpeciesToCanvas(card.querySelector('canvas'), s.id, {silhouette:!discovered, animT:0.25});
+    card.onclick = ()=>showDexDetail(s.id);
+  }
+}
+function showDexDetail(speciesId){
+  const s = SPECIES_BY_ID[speciesId]; const e = gameState.dex[speciesId];
+  const discovered = e && (e.seen||e.caught);
+  const panel = document.getElementById('dexDetail'); panel.classList.add('show');
+  const rarity = RARITY_BY_ID[s.rarity];
+  panel.innerHTML = `<canvas width="180" height="180"></canvas>
+    <div class="info">
+      <h3>${discovered? s.name : '??? ('+s.archetypeLabel+')'}</h3>
+      <span class="rarity-tag" style="background:${rarity.color}22; color:${rarity.color}">${rarity.name}</span>
+      <p style="margin-top:8px; font-size:0.85rem; color:var(--ui-text-dim);">${discovered? s.description : 'Aún no has descubierto esta criatura. Explora los biomas donde podría habitar para revelar su información.'}</p>
+      ${discovered?`<div class="stats-mini">
+        <span>HP base: ${s.baseStats.hp}</span><span>ATQ base: ${s.baseStats.atk}</span>
+        <span>DEF base: ${s.baseStats.def}</span><span>VEL base: ${s.baseStats.spd}</span>
+        <span>Elemento: ${s.element}</span><span>Hábitat: ${s.habitat}</span>
+        <span>Horario: ${s.timeOfDay}</span><span>Capturas: ${e?e.timesCaught:0}</span>
+        <span>Nivel máx.: ${e?e.highestLevel:0}</span>
+        <span>Lugares: ${s.biomes.map(b=>BIOME_BY_ID[b].name).join(', ')}</span>
+      </div>`:''}
+    </div>`;
+  renderSpeciesToCanvas(panel.querySelector('canvas'), speciesId, {silhouette:!discovered, animT:0.3});
+}
+
+/* ---------------------------------------------------------------------
+   Panel: Misiones
+   --------------------------------------------------------------------- */
+function renderQuestsModal(){
+  const body = document.getElementById('questBody'); body.innerHTML='';
+  const entries = Object.entries(gameState.quests);
+  if(!entries.length) body.innerHTML = '<p style="color:var(--ui-text-dim)">Aún no has aceptado ninguna misión. Habla con los NPC del mundo para conseguir tareas.</p>';
+  const active = entries.filter(([id,r])=>r.status==='active');
+  const done = entries.filter(([id,r])=>r.status==='completed');
+  for(const [id,rec] of active){
+    const q = QUEST_BY_ID[id]; if(!q) continue;
+    const div = document.createElement('div'); div.className='quest-item';
+    let progTxt = '';
+    if(q.type==='capture_any') progTxt = 'Progreso: '+(rec.progress||0)+'/'+q.target;
+    if(q.type==='dex_count') progTxt = 'Progreso: '+(rec.progress||0)+'/'+q.target;
+    if(q.type==='complete_biome_collection') progTxt = 'Progreso: '+(rec.progress||0)+'/'+q.count;
+    div.innerHTML = `<h4>${q.title}</h4><p>${q.desc}</p>${progTxt?'<div class="prog">'+progTxt+'</div>':''}`;
+    body.appendChild(div);
+  }
+  if(done.length){
+    const h = document.createElement('h3'); h.textContent='Completadas'; h.style.margin='16px 0 8px'; body.appendChild(h);
+    for(const [id] of done){
+      const q = QUEST_BY_ID[id]; if(!q) continue;
+      const div = document.createElement('div'); div.className='quest-item done';
+      div.innerHTML = `<h4>✓ ${q.title}</h4><p>${q.desc}</p>`;
+      body.appendChild(div);
+    }
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Panel: Logros
+   --------------------------------------------------------------------- */
+function renderAchievementsModal(){
+  const body = document.getElementById('achBody'); body.innerHTML='';
+  document.getElementById('btnOpenAchievements').setAttribute('data-badge', String(Object.keys(gameState.achievements).length));
+  for(const a of ACHIEVEMENTS){
+    const unlocked = !!gameState.achievements[a.id];
+    const div = document.createElement('div'); div.className='quest-item'+(unlocked?' done':'');
+    div.innerHTML = `<h4>${unlocked?'🏆':'🔒'} ${a.name}</h4><p>${a.desc}</p>`;
+    body.appendChild(div);
+  }
+}
+
+/* ---------------------------------------------------------------------
+   Panel: Tienda
+   --------------------------------------------------------------------- */
+function openShop(){
+  document.getElementById('shopTitle').textContent = 'Tienda de '+currentRuntime.biome.name;
+  renderShopModal();
+  openModal('modalShop');
+}
+function renderShopModal(){
+  document.getElementById('shopCoins').textContent = gameState.coins;
+  const grid = document.getElementById('shopGrid'); grid.innerHTML='';
+  const buyable = [...CAPSULES, ...CONSUMABLES, ...UPGRADES];
+  for(const it of buyable){
+    const card = document.createElement('div'); card.className='card'; card.style.cursor='default';
+    card.innerHTML = `<div style="font-size:2rem;">${itemEmoji(it)}</div><div class="name">${it.name}</div>
+      <div class="sub">${it.desc}</div><div class="count">Tienes: ${invCount(it.id)}</div>
+      <button class="icon-btn" data-buy="${it.id}" style="font-size:0.7rem; padding:5px 10px; margin-top:6px;">Comprar (${it.price}🪙)</button>`;
+    grid.appendChild(card);
+  }
+  grid.querySelectorAll('[data-buy]').forEach(btn=>{
+    btn.onclick = ()=>{
+      const id = btn.getAttribute('data-buy'); const it = ITEM_BY_ID[id];
+      if(gameState.coins<it.price){ showToast('No tienes suficientes monedas.'); return; }
+      gameState.coins -= it.price;
+      if(it.type==='mejora') gameState.bagCapacityMult = (gameState.bagCapacityMult||1)+0.5;
+      else invAdd(id,1);
+      showToast('Comprado: '+it.name);
+      renderShopModal(); saveGame();
+    };
+  });
+}
+
+/* ---------------------------------------------------------------------
+   Panel: Ajustes
+   --------------------------------------------------------------------- */
+function renderSettingsModal(){
+  setToggle('toggleMusic', gameState.settings.music);
+  setToggle('toggleSfx', gameState.settings.sfx);
+  setToggle('toggleTouch', gameState.settings.touch);
+  document.getElementById('settingsPlaytime').textContent = Math.round(gameState.playtimeSeconds/3600*10)/10+'h';
+}
+function setToggle(id, val){
+  const el = document.getElementById(id);
+  el.classList.toggle('on', !!val);
+}
+function wireSettingsToggles(){
+  document.getElementById('toggleMusic').onclick = ()=>{ gameState.settings.music=!gameState.settings.music; setToggle('toggleMusic',gameState.settings.music); saveGame(); };
+  document.getElementById('toggleSfx').onclick = ()=>{ gameState.settings.sfx=!gameState.settings.sfx; setToggle('toggleSfx',gameState.settings.sfx); saveGame(); };
+  document.getElementById('toggleTouch').onclick = ()=>{
+    gameState.settings.touch=!gameState.settings.touch;
+    setToggle('toggleTouch',gameState.settings.touch);
+    document.getElementById('touchControls').classList.toggle('active', gameState.settings.touch);
+    saveGame();
+  };
+  document.getElementById('btnSaveNow').onclick = ()=>{ saveGame(); showToast('Partida guardada.'); };
+  document.getElementById('btnExitToMenu').onclick = ()=>{
+    saveGame();
+    document.getElementById('gameRoot').classList.remove('active');
+    document.getElementById('starterPanel').classList.remove('active');
+    document.getElementById('mainMenuPanel').style.display='block';
+    document.getElementById('startScreen').style.display='flex';
+    document.getElementById('btnContinue').disabled = false;
+    document.getElementById('btnReset').disabled = false;
+    closeModal('modalSettings');
+    inputLocked = true;
+  };
+}
+
+function wireModalButtons(){
+  document.querySelectorAll('.modal-close').forEach(b=> b.onclick=()=>closeModal(b.getAttribute('data-close')));
+  document.getElementById('btnOpenParty').onclick = ()=>{ renderPartyModal(); openModal('modalParty'); };
+  document.getElementById('btnOpenInventory').onclick = ()=>{ renderInventoryTabs(); renderInventoryBody(); openModal('modalInventory'); };
+  document.getElementById('btnOpenDex').onclick = ()=>{ renderDexModal(); openModal('modalDex'); };
+  document.getElementById('btnOpenQuests').onclick = ()=>{ renderQuestsModal(); openModal('modalQuests'); };
+  document.getElementById('btnOpenAchievements').onclick = ()=>{ renderAchievementsModal(); openModal('modalAchievements'); };
+  document.getElementById('btnOpenSettings').onclick = ()=>{ renderSettingsModal(); openModal('modalSettings'); };
+  wireSettingsToggles();
+  document.getElementById('dialogueBox').addEventListener('click', (e)=>{ if(e.target.tagName==='BUTTON') return; advanceDialogue(); });
+}
+
+/* =====================================================================
+   10. ARRANQUE: PANTALLA DE INICIO, SELECCIÓN DE INICIAL, NUEVA PARTIDA
+   ===================================================================== */
+let selectedStarterId = null;
+function getStarterCandidates(){
+  const pool = speciesByBiome('bosque_verde').filter(s=>s.rarity==='comun' && !s.isBoss);
+  const seenArch = new Set(); const out=[];
+  for(const s of pool){ if(!seenArch.has(s.archetypeId)){ seenArch.add(s.archetypeId); out.push(s); } if(out.length>=3) break; }
+  return out.length>=3 ? out : pool.slice(0,3);
+}
+function renderStarterGrid(){
+  selectedStarterId = null;
+  document.getElementById('btnConfirmStarter').disabled = true;
+  const grid = document.getElementById('starterGrid'); grid.innerHTML='';
+  for(const s of getStarterCandidates()){
+    const card = document.createElement('div'); card.className='starter-card';
+    card.innerHTML = `<canvas width="160" height="120"></canvas><h3>${s.name}</h3><p>${s.archetypeLabel} · tipo ${s.element}</p>`;
+    grid.appendChild(card);
+    renderSpeciesToCanvas(card.querySelector('canvas'), s.id, {animT:0.3});
+    card.onclick = ()=>{
+      grid.querySelectorAll('.starter-card').forEach(c=>c.classList.remove('selected'));
+      card.classList.add('selected'); selectedStarterId = s.id;
+      document.getElementById('btnConfirmStarter').disabled = false;
+    };
+  }
+}
+
+function beginNewGame(starterId){
+  gameState = defaultGameState();
+  gameState.starterSpeciesId = starterId;
+  const starter = createCreatureInstance(starterId, 5);
+  gameState.team.push(starter);
+  markCaught(starterId, 5);
+  QUESTS.filter(q=>!q.giverNpcId).forEach(q=>acceptQuest(q.id));
+  startGameSession();
+}
+function beginContinueGame(){
+  const loaded = loadGame();
+  if(!loaded){ showToast('No se encontró ninguna partida guardada.'); return; }
+  gameState = loaded;
+  startGameSession();
+}
+function startGameSession(){
+  document.getElementById('startScreen').style.display='none';
+  document.getElementById('gameRoot').classList.add('active');
+  worldCanvas = document.getElementById('worldCanvas'); wctx = worldCanvas.getContext('2d');
+  minimapCanvas = document.getElementById('minimapCanvas'); mctx = minimapCanvas.getContext('2d');
+  resizeCanvases();
+  document.getElementById('touchControls').classList.toggle('active', !!gameState.settings.touch);
+  enterWorld(gameState.currentWorld, false);
+  renderPartyBar();
+  updateQuestBadge();
+  lastFrameTime = 0;
+  requestAnimationFrame(gameLoop);
+  startAutosave();
+  setInterval(()=>{ if(gameState) gameState.playtimeSeconds++; }, 1000);
+  saveGame();
+}
+
+document.addEventListener('DOMContentLoaded', ()=>{
+  document.getElementById('btnContinue').disabled = !hasSaveGame();
+  document.getElementById('btnReset').disabled = !hasSaveGame();
+  document.getElementById('btnNewGame').onclick = ()=>{
+    document.getElementById('mainMenuPanel').style.display='none';
+    document.getElementById('starterPanel').classList.add('active');
+    renderStarterGrid();
+  };
+  document.getElementById('btnBackToMenu').onclick = ()=>{
+    document.getElementById('starterPanel').classList.remove('active');
+    document.getElementById('mainMenuPanel').style.display='block';
+  };
+  document.getElementById('btnContinue').onclick = beginContinueGame;
+  document.getElementById('btnConfirmStarter').onclick = ()=>{ if(selectedStarterId) beginNewGame(selectedStarterId); };
+  document.getElementById('btnReset').onclick = ()=>{
+    if(confirm('¿Seguro que deseas borrar tu partida guardada? Esta acción no se puede deshacer.')){
+      deleteSaveGame();
+      document.getElementById('btnContinue').disabled = true;
+      document.getElementById('btnReset').disabled = true;
+      showToast('Partida borrada.');
+    }
+  };
+  setupInput();
+  setupCombatMenu();
+  wireModalButtons();
+  window.addEventListener('beforeunload', ()=>{ if(gameState) saveGame(); });
+});
+
+</script>
+</body>
+</html>
