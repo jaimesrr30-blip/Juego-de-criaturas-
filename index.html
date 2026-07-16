@@ -506,6 +506,7 @@ canvas{display:block; image-rendering:pixelated; image-rendering:crisp-edges;}
         <div style="font-size:0.8rem; color:var(--ui-text-dim);">Probabilidad de captura</div>
         <div class="pct" id="captureChancePct">0%</div>
         <div id="captureCapsuleName" style="font-size:0.8rem;"></div>
+        <div id="captureLevelWarn" style="font-size:0.68rem; color:#f87171; margin-top:4px; max-width:220px; display:none;"></div>
         <button class="menu-btn primary" id="btnThrowCapsule" style="min-width:auto; padding:8px 20px; margin-top:6px;">Lanzar</button>
         <button class="menu-btn" id="btnCancelCapture" style="min-width:auto; padding:8px 20px;">Cancelar</button>
       </div>
@@ -908,11 +909,14 @@ function speciesByBiome(biomeId){ return SPECIES_CATALOG.filter(s=>s.biomes.incl
    3. OBJETOS, CÁPSULAS DE CAPTURA Y CONSUMIBLES
    ===================================================================== */
 const CAPSULES = [
-  {id:'cap_basica',      name:'Cápsula Básica',      type:'capsula', price:50,   power:1.00, maxCap:0.92, desc:'Cápsula estándar. Ideal para criaturas comunes.'},
-  {id:'cap_reforzada',   name:'Cápsula Reforzada',   type:'capsula', price:150,  power:1.55, maxCap:0.86, desc:'Carcasa reforzada que mejora la captura de criaturas fuertes.'},
-  {id:'cap_marina',      name:'Cápsula Marina',      type:'capsula', price:180,  power:1.35, maxCap:0.86, habitatBonus:'acuatico', habitatMult:1.7, desc:'Sellada para resistir el agua. Muy eficaz con criaturas acuáticas.'},
-  {id:'cap_legendaria',  name:'Cápsula Legendaria',  type:'capsula', price:600,  power:2.25, maxCap:0.76, desc:'Forjada con materiales raros para desafiar a las criaturas más poderosas.'},
-  {id:'cap_dimensional', name:'Cápsula Dimensional', type:'capsula', price:1600, power:3.10, maxCap:0.66, desc:'Perfora la realidad misma. La cápsula más avanzada jamás creada.'}
+  {id:'cap_basica',      name:'Cápsula Básica',      type:'capsula', price:50,   power:1.00, maxCap:0.92, maxLevel:20,      desc:'Cápsula estándar. Muy eficaz hasta nivel 20 aproximadamente.'},
+  {id:'cap_reforzada',   name:'Cápsula Reforzada',   type:'capsula', price:150,  power:1.30, maxCap:0.87, maxLevel:40,      desc:'Carcasa reforzada. Eficaz hasta nivel 40 aproximadamente.'},
+  {id:'cap_marina',      name:'Cápsula Marina',      type:'capsula', price:180,  power:1.20, maxCap:0.85, maxLevel:40,      habitatBonus:'acuatico', habitatMult:1.7, desc:'Sellada para resistir el agua. Muy eficaz con criaturas acuáticas hasta nivel 40.'},
+  {id:'cap_avanzada',    name:'Cápsula Avanzada',    type:'capsula', price:320,  power:1.55, maxCap:0.83, maxLevel:60,      desc:'Diseño mejorado. Eficaz hasta nivel 60 aproximadamente.'},
+  {id:'cap_superior',    name:'Cápsula Superior',    type:'capsula', price:550,  power:1.80, maxCap:0.80, maxLevel:80,      desc:'Materiales de alta calidad. Eficaz hasta nivel 80 aproximadamente.'},
+  {id:'cap_legendaria',  name:'Cápsula Legendaria',  type:'capsula', price:850,  power:2.10, maxCap:0.76, maxLevel:100,     desc:'Forjada con materiales raros. Eficaz hasta nivel 100 aproximadamente.'},
+  {id:'cap_suprema',     name:'Cápsula Suprema',     type:'capsula', price:1250, power:2.45, maxCap:0.72, maxLevel:120,     desc:'Tecnología de vanguardia. Eficaz hasta nivel 120 aproximadamente.'},
+  {id:'cap_dimensional', name:'Cápsula Dimensional', type:'capsula', price:1800, power:2.85, maxCap:0.68, maxLevel:Infinity,desc:'Perfora la realidad misma. Sin límite de nivel conocido. La cápsula más avanzada jamás creada.'}
 ];
 const CONSUMABLES = [
   {id:'pocion_pequena', name:'Poción Pequeña',   type:'pocion', price:40,  sellPrice:15, healPercent:0.30, desc:'Restaura el 30% de la vida de una criatura.'},
@@ -1128,7 +1132,7 @@ function generateWorldMap(biomeId){
 }
 
 /* ---- Generadores de plantillas de NPC ---- */
-function makeWorldNPCs(biomeId, worldName, bossName, elderLine, explorerLine){
+function makeWorldNPCs(biomeId, worldName, bossName, elderLine, explorerLine, trainerName){
   return [
     {id:biomeId+'_anciano', name:'Anciano Explorador', role:'sabio', x:0, y:-2,
      lines:[ elderLine, `${worldName} esconde muchos secretos para quien sepa mirar.`, 'Cuida siempre de tus criaturas; ellas cuidarán de ti.'],
@@ -1136,7 +1140,11 @@ function makeWorldNPCs(biomeId, worldName, bossName, elderLine, explorerLine){
     {id:biomeId+'_comerciante', name:'Comerciante Itinerante', role:'comerciante', x:2, y:0,
      lines:['¡Bienvenido a mi tienda! Tengo justo lo que necesitas.'], shop:true},
     {id:biomeId+'_viajero', name:'Viajero', role:'viajero', x:-2, y:2,
-     lines:[ explorerLine, `Dicen que ${bossName} vigila esta región. No es fácil de encontrar... ni de vencer.` ]}
+     lines:[ explorerLine, `Dicen que ${bossName} vigila esta región. No es fácil de encontrar... ni de vencer.` ]},
+    {id:biomeId+'_coleccionista', name:'Vecino Necesitado', role:'coleccionista', x:3, y:-3,
+     lines:[ 'Ando reuniendo criaturas para un estudio... ¿me traerías algunas?', `Cualquier criatura de ${worldName} me sirve, no hace falta que sea rara.` ]},
+    {id:biomeId+'_entrenador', name:trainerName, role:'entrenador', x:0, y:3,
+     lines:[ `Soy ${trainerName}, entrenador de esta región.`, 'Mis criaturas y yo hemos entrenado mucho. ¿Te atreves a ponernos a prueba?' ]}
   ];
 }
 
@@ -1157,8 +1165,12 @@ const WORLD_FLAVOR = {
 };
 
 const BOSS_TIER_BY_ORDER = ['legendaria','legendaria','legendaria','mitica','mitica','mitica','omega','omega','omega','prohibida','prohibida','secreta','divina'];
+const TRAINER_NAMES_M = ['Diego','Kai','Teo','Iker','Bruno','Nico','Marcos','Hugo'];
+const TRAINER_NAMES_F = ['Marina','Luna','Elena','Nadia','Sara','Vera','Amaia','Carla'];
+const TRAINER_TITLES_M = ['el Domador','el Rastreador','el Veterano','el Estratega'];
+const TRAINER_TITLES_F = ['la Guardabosques','la Cazadora','la Exploradora','la Campeona Local'];
 
-/* Construye definiciones completas de mundo (npcs, tienda, jefe) a partir de biomas */
+/* Construye definiciones completas de mundo (npcs, tienda, jefe, entrenador) a partir de biomas */
 function buildWorldDefs(){
   const defs = {};
   for(const b of BIOMES_META){
@@ -1173,12 +1185,25 @@ function buildWorldDefs(){
     bossRec.name = bossRec.name + ' — Guardián de ' + b.name;
     SPECIES_CATALOG.push(bossRec);
     SPECIES_BY_ID[bossRec.id] = bossRec;
+
+    const band = levelBandForOrder(b.order);
+    const trainerRng = mulberry32(hashStr('trainer_'+b.id));
+    const trainerIsF = trainerRng()<0.5;
+    const trainerName = (trainerIsF ? rngPick(trainerRng, TRAINER_NAMES_F) : rngPick(trainerRng, TRAINER_NAMES_M))+' '+(trainerIsF ? rngPick(trainerRng, TRAINER_TITLES_F) : rngPick(trainerRng, TRAINER_TITLES_M));
+    const trainerPool = speciesByBiome(b.id).filter(s=>!s.isBoss);
+    const trainerTeam = [];
+    for(let i=0;i<2;i++){
+      const sp = rngPick(trainerRng, trainerPool.length?trainerPool:SPECIES_CATALOG);
+      trainerTeam.push({speciesId: sp.id, level: rngInt(trainerRng, band.min+2, band.max)});
+    }
+
     defs[b.id] = {
       id:b.id, name:b.name, order:b.order,
-      npcs: makeWorldNPCs(b.id, b.name, bossRec.name, flavor.elder, flavor.explorer),
+      npcs: makeWorldNPCs(b.id, b.name, bossRec.name, flavor.elder, flavor.explorer, trainerName),
       bossSpeciesId: bossRec.id,
-      bossLevel: 12 + b.order*6,
-      keyItemId: 'llave_'+b.id
+      bossLevel: (b.order+1)*10 + 2,
+      keyItemId: 'llave_'+b.id,
+      trainer: {id:'trainer_'+b.id, name:trainerName, team:trainerTeam}
     };
   }
   // renumerar dex incluyendo jefes al final
@@ -1268,6 +1293,23 @@ const QUESTS = [
    desc:'Registra 150 criaturas distintas en tu Enciclopedia.', type:'dex_count', target:150,
    reward:{coins:900, items:[{id:'cap_legendaria',qty:2}]}}
 ];
+/* Misiones generadas por mundo: un vecino que pide criaturas y un entrenador que reta a duelo */
+for(const b of BIOMES_META){
+  QUESTS.push({
+    id:'q_collect_'+b.id, title:'Recolector de '+b.name,
+    giverWorld:b.id, giverNpcId:b.id+'_coleccionista',
+    desc:'Captura y trae 3 criaturas cualquiera para el vecino de '+b.name+'.',
+    type:'capture_any', target:3,
+    reward:{coins: 90 + b.order*50}
+  });
+  QUESTS.push({
+    id:'q_trainer_'+b.id, title:'Duelo en '+b.name,
+    giverWorld:b.id, giverNpcId:b.id+'_entrenador',
+    desc:'Derrota al entrenador de '+b.name+' en un combate de criaturas.',
+    type:'defeat_trainer', target:'trainer_'+b.id,
+    reward:{coins: 120 + b.order*70}
+  });
+}
 const QUEST_BY_ID = Object.fromEntries(QUESTS.map(q=>[q.id,q]));
 
 /* ---------------------------------------------------------------------
@@ -1425,7 +1467,6 @@ function ensureDexEntry(speciesId){
   if(!gameState.dex[speciesId]) gameState.dex[speciesId] = {seen:false, caught:false, timesCaught:0, highestLevel:0};
   return gameState.dex[speciesId];
 }
-function markSeen(speciesId){ ensureDexEntry(speciesId).seen = true; }
 function markCaught(speciesId, level){
   const e = ensureDexEntry(speciesId);
   e.seen = true; e.caught = true; e.timesCaught++; e.highestLevel = Math.max(e.highestLevel, level);
@@ -1818,7 +1859,13 @@ function isWalkableTile(map, tx, ty){
   return true;
 }
 
-function levelForBiome(order){ return clamp(order*6 + rngInt(Math.random, 1,6), 1, 95); }
+/* Cada mundo cubre una franja de 10 niveles: mundo 1 (orden 0) = Nv.1-10,
+   mundo 2 (orden 1) = Nv.11-20, mundo 3 = Nv.21-30, etc. */
+function levelBandForOrder(order){ return {min: order*10+1, max: order*10+10}; }
+function levelForBiome(order){
+  const band = levelBandForOrder(order);
+  return rngInt(Math.random, band.min, band.max);
+}
 
 function spawnWildEntity(map, biomeDef, biome){
   const isNight = isNightHour(gameState.clock.hour);
@@ -1911,17 +1958,19 @@ function updatePlayerMovement(dt){
   if(keysDown['ArrowLeft']||keysDown['KeyA']||touchDir.left) dx-=1;
   if(keysDown['ArrowRight']||keysDown['KeyD']||touchDir.right) dx+=1;
   player.moving = (dx!==0||dy!==0);
+  player.running = !!keysDown['Space'];
   if(player.moving){
     const len = Math.hypot(dx,dy); dx/=len; dy/=len;
     if(Math.abs(dx)>Math.abs(dy)) player.facing = dx>0?'right':'left';
     else player.facing = dy>0?'down':'up';
     const map = currentRuntime.map;
-    const nx = player.x + dx*player.speed*dt, ny = player.y + dy*player.speed*dt;
+    const speed = player.speed * (player.running ? 1.9 : 1);
+    const nx = player.x + dx*speed*dt, ny = player.y + dy*speed*dt;
     const tx = Math.floor(nx/TILE), ty = Math.floor(player.y/TILE);
     const ty2 = Math.floor(ny/TILE), tx2 = Math.floor(player.x/TILE);
     if(isWalkableTile(map, tx, ty)) player.x = clamp(nx, TILE, map.width*TILE-TILE);
     if(isWalkableTile(map, tx2, ty2)) player.y = clamp(ny, TILE, map.height*TILE-TILE);
-    player.animPhase += dt*4;
+    player.animPhase += dt*(player.running?6:4);
   }
   gameState.playerPos.x = player.x/TILE; gameState.playerPos.y = player.y/TILE; gameState.playerFacing = player.facing;
 }
@@ -2005,6 +2054,7 @@ function checkProximity(){
 /* ---------------------------------------------------------------------
    Renderizado
    --------------------------------------------------------------------- */
+const NPC_ROLE_COLOR = {comerciante:'#c98a3d', sabio:'#6a5acd', viajero:'#3d8ac9', coleccionista:'#4ade80', entrenador:'#e63946'};
 function drawPersonSprite(ctx,x,y,bodyColor,accentColor,animPhase,moving){
   ctx.save(); ctx.translate(x,y);
   const bob = moving ? Math.sin(animPhase*Math.PI*2)*2.4 : 0;
@@ -2106,7 +2156,7 @@ function render(){
   const rt = currentRuntime;
   const drawables = [];
   for(const d of rt.map.decor) drawables.push({y:d.y*TILE, draw:()=>renderDecorItem(d)});
-  for(const n of rt.npcEntities) drawables.push({y:n.y, draw:()=>drawPersonSprite(wctx, n.x-camera.x, n.y-camera.y, n.role==='comerciante'?'#c98a3d':(n.role==='sabio'?'#6a5acd':'#3d8ac9'), '#3a3a3a', n.animPhase, false)});
+  for(const n of rt.npcEntities) drawables.push({y:n.y, draw:()=>drawPersonSprite(wctx, n.x-camera.x, n.y-camera.y, NPC_ROLE_COLOR[n.role]||'#3d8ac9', '#3a3a3a', n.animPhase, false)});
   for(const w of rt.wildEntities){
     const species = SPECIES_BY_ID[w.speciesId];
     drawables.push({y:w.y, draw:()=>{
@@ -2254,6 +2304,7 @@ function gameLoop(ts){
 function setupInput(){
   window.addEventListener('keydown', e=>{
     keysDown[e.code]=true;
+    if(e.code==='Space'){ e.preventDefault(); }
     if(e.code==='KeyE'){ handleInteract(); }
     if(e.code==='Escape'){ closeTopModal(); }
   });
@@ -2361,7 +2412,6 @@ function buildEnemyBoss(worldDef){
 
 function startWildBattle(wildRef){
   if(!teamHasUsable()){ showToast('¡No tienes criaturas en condiciones de luchar!'); return; }
-  markSeen(wildRef.speciesId);
   combat = {
     mode:'wild', enemy: buildEnemyFromWild(wildRef), wildRef, biomeId: currentRuntime.biome.id,
     over:false, playerFled:false
@@ -2377,26 +2427,58 @@ function openBossConfirm(worldDef){
 }
 function startBossBattle(worldDef){
   if(!teamHasUsable()){ showToast('¡No tienes criaturas en condiciones de luchar!'); return; }
-  markSeen(worldDef.bossSpeciesId);
   combat = { mode:'boss', enemy: buildEnemyBoss(worldDef), worldDef, biomeId: currentRuntime.biome.id, over:false };
-  openCombatScreen(true);
+  openCombatScreen();
 }
 
-function openCombatScreen(isBoss){
+function openTrainerConfirm(npc){
+  const biome = currentRuntime.biome;
+  const trainerDef = WORLD_DEFS[biome.id].trainer;
+  const questId = 'q_trainer_'+biome.id;
+  if(QUEST_BY_ID[questId] && !gameState.quests[questId]) acceptQuest(questId);
+  const rec = gameState.quests[questId];
+  const text = (rec && rec.status==='completed')
+    ? 'Fue un gran combate. ¿Te apetece una revancha amistosa?'
+    : '¡Te reto a un combate de criaturas! Mi equipo contra el tuyo. ¿Aceptas el desafío?';
+  showChoiceDialogue(npc.name, text, [
+    {label:'⚔️ Aceptar el desafío', action:()=>startTrainerBattle(trainerDef, biome.id)},
+    {label:'Ahora no', action:()=>{}}
+  ]);
+}
+function startTrainerBattle(trainerDef, biomeId){
+  if(!teamHasUsable()){ showToast('¡No tienes criaturas en condiciones de luchar!'); return; }
+  const queue = trainerDef.team.map(t=>createCreatureInstance(t.speciesId, t.level));
+  const first = queue.shift();
+  combat = {
+    mode:'trainer', enemy:first, enemyQueue:queue, trainerName:trainerDef.name, trainerId:trainerDef.id,
+    biomeId, over:false
+  };
+  openCombatScreen();
+}
+
+function openCombatScreen(){
   inputLocked = true;
   const scr = document.getElementById('combatScreen');
   scr.classList.add('show');
   document.getElementById('combatSubMenu').classList.remove('show');
   document.getElementById('captureChanceTag').classList.remove('show');
-  document.querySelector('.combat-btn.capture').style.display = combat.mode==='boss' ? 'none' : '';
-  document.querySelector('.combat-btn.flee').style.display = combat.mode==='boss' ? 'none' : '';
-  if(isBoss){
+  const noCaptureOrFlee = combat.mode==='boss' || combat.mode==='trainer';
+  document.querySelector('.combat-btn.capture').style.display = noCaptureOrFlee ? 'none' : '';
+  document.querySelector('.combat-btn.flee').style.display = noCaptureOrFlee ? 'none' : '';
+  if(combat.mode==='boss'){
     document.getElementById('bossBannerName').textContent = SPECIES_BY_ID[combat.enemy.speciesId].name.toUpperCase();
     document.getElementById('bossBannerSub').textContent = 'Guardián de '+BIOME_BY_ID[combat.biomeId].name;
     document.getElementById('bossBanner').classList.add('show');
     setTimeout(()=>document.getElementById('bossBanner').classList.remove('show'), 2400);
+  } else if(combat.mode==='trainer'){
+    document.getElementById('bossBannerName').textContent = combat.trainerName.toUpperCase();
+    document.getElementById('bossBannerSub').textContent = 'Entrenador de '+BIOME_BY_ID[combat.biomeId].name;
+    document.getElementById('bossBanner').classList.add('show');
+    setTimeout(()=>document.getElementById('bossBanner').classList.remove('show'), 2400);
   }
-  document.getElementById('combatLog').textContent = combat.mode==='boss' ? '¡Comienza el combate contra el jefe!' : '¡Un encuentro salvaje!';
+  document.getElementById('combatLog').textContent =
+    combat.mode==='boss' ? '¡Comienza el combate contra el jefe!' :
+    combat.mode==='trainer' ? '¡Comienza el duelo de entrenadores!' : '¡Un encuentro salvaje!';
   combatCanvas = document.getElementById('combatCanvas');
   cctx = combatCanvas.getContext('2d');
   combatCanvas.width = combatCanvas.clientWidth; combatCanvas.height = combatCanvas.clientHeight;
@@ -2564,13 +2646,13 @@ function handleDefeat(){
   saveGame();
 }
 async function handleVictory(){
-  combat.over = true;
   const eSpecies = SPECIES_BY_ID[combat.enemy.speciesId];
   logMsg('¡Has vencido a '+eSpecies.name+'!');
   await wait(900);
   const isBoss = combat.mode==='boss';
+  const isTrainer = combat.mode==='trainer';
   const xpGain = Math.round(combat.enemy.level * 8 * RARITY_BY_ID[eSpecies.rarity].xpMult * (isBoss?2.4:1));
-  const coinGain = Math.round(combat.enemy.level*(isBoss?18:4) + rngInt(Math.random,0,20));
+  const coinGain = Math.round(combat.enemy.level*(isBoss?18:isTrainer?10:4) + rngInt(Math.random,0,20));
   gameState.coins += coinGain;
   const p = activeTeamMember();
   let levelMsg = '';
@@ -2580,7 +2662,17 @@ async function handleVictory(){
   }
   logMsg('Ganas '+coinGain+' monedas y '+xpGain+' de experiencia.'+levelMsg);
   await wait(1200);
-  if(Math.random()<0.45){
+
+  if(isTrainer && combat.enemyQueue && combat.enemyQueue.length){
+    combat.enemy = combat.enemyQueue.shift();
+    refreshCombatUI();
+    logMsg(combat.trainerName+' envía a '+SPECIES_BY_ID[combat.enemy.speciesId].name+'!');
+    await wait(1200);
+    return;
+  }
+
+  combat.over = true;
+  if(!isTrainer && Math.random()<0.45){
     const mat = rngPick(Math.random, MATERIALS);
     invAdd(mat.id,1);
     logMsg('Encuentras: '+mat.name+'.');
@@ -2588,12 +2680,16 @@ async function handleVictory(){
   }
   if(isBoss){
     gameState.bossesDefeated.push(combat.biomeId);
+    markCaught(eSpecies.id, combat.enemy.level);
     invAdd('llave_'+combat.biomeId, 1);
     const nxt = nextWorldId(combat.biomeId);
     if(nxt && !gameState.unlockedWorlds.includes(nxt)){ gameState.unlockedWorlds.push(nxt); showToast('🗝️ Has obtenido la '+keyItemName(combat.biomeId)+' y desbloqueado '+BIOME_BY_ID[nxt].name+'!'); }
     else showToast('🗝️ Has obtenido la '+keyItemName(combat.biomeId)+'!');
     currentRuntime.bossAlive = false;
     onQuestEvent('defeat_boss', combat.biomeId);
+  } else if(isTrainer){
+    showToast('🏅 ¡Has derrotado a '+combat.trainerName+'!');
+    onQuestEvent('defeat_trainer', combat.trainerId);
   } else {
     const idx = currentRuntime.wildEntities.findIndex(w=>w.uid===combat.wildRef.uid);
     if(idx>=0) currentRuntime.wildEntities.splice(idx,1);
@@ -2617,8 +2713,14 @@ function captureChanceFor(capsule){
   let base = capsule.power * rarity.catchMod * (1.6-hpRatio)/1.6;
   if(capsule.habitatBonus && species.habitat===capsule.habitatBonus) base *= capsule.habitatMult;
   if(e.status) base *= 1.25;
-  base *= (1 - clamp((e.level-1)/260,0,0.35));
-  let chance = clamp(base, 0.03, capsule.maxCap);
+  // Penalización por nivel: capturar una criatura por encima del rango de la cápsula
+  // sigue siendo posible, pero cada nivel de más lo hace mucho más difícil.
+  // Cuanta menos vida le quede a la criatura, más se compensa esta penalización.
+  if(capsule.maxLevel!=null && e.level>capsule.maxLevel){
+    const over = e.level - capsule.maxLevel;
+    base *= Math.pow(0.85, over);
+  }
+  let chance = clamp(base, 0.02, capsule.maxCap);
   if(species.rarity==='divina') chance = Math.min(chance,0.28);
   else if(species.rarity==='secreta') chance = Math.min(chance,0.35);
   else if(species.rarity==='prohibida') chance = Math.min(chance,0.42);
@@ -2637,6 +2739,11 @@ function showCapturePrompt(capsule){
   const chance = captureChanceFor(capsule);
   document.getElementById('captureChancePct').textContent = Math.round(chance*100)+'%';
   document.getElementById('captureCapsuleName').textContent = capsule.name;
+  const warnEl = document.getElementById('captureLevelWarn');
+  if(capsule.maxLevel!=null && combat.enemy.level>capsule.maxLevel){
+    warnEl.textContent = '⚠️ Este nivel supera el rango de la cápsula: costará mucho más capturarla (aunque no es imposible).';
+    warnEl.style.display = 'block';
+  } else warnEl.style.display = 'none';
   document.getElementById('captureChanceTag').classList.add('show');
   document.getElementById('btnThrowCapsule').onclick = ()=>{ document.getElementById('captureChanceTag').classList.remove('show'); throwCapsule(capsule, chance); };
   document.getElementById('btnCancelCapture').onclick = ()=>document.getElementById('captureChanceTag').classList.remove('show');
@@ -2789,6 +2896,7 @@ function showChoiceDialogue(name, text, choices){ startDialogue(name, [text], ch
 function openNpcDialogue(npc){
   if(!gameState.npcTalked.includes(npc.id)) gameState.npcTalked.push(npc.id);
   onQuestEvent('talk_npc', npc.id);
+  if(npc.role==='entrenador'){ openTrainerConfirm(npc); return; }
   const lines = npc.lines.slice();
   const offered = QUESTS.filter(q=>q.giverNpcId===npc.id);
   const extraChoices = [];
@@ -2884,6 +2992,7 @@ function onQuestEvent(type, data){
     else if(q.type==='discover_ruin' && type==='discover_ruin' && data===q.target) done=true;
     else if(q.type==='capture_habitat' && type==='capture_habitat' && data===q.target) done=true;
     else if(q.type==='capture_rarity' && type==='capture_rarity' && RARITY_ORDER.indexOf(data)>=RARITY_ORDER.indexOf(q.target)) done=true;
+    else if(q.type==='defeat_trainer' && type==='defeat_trainer' && data===q.target) done=true;
     if(done) completeQuestReward(q);
   }
   if(type==='capture_any' && data && gameState){
